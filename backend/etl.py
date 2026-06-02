@@ -1,11 +1,13 @@
 import requests
+import gzip
+import json
 from sqlalchemy import text
 from database import engine
 from datetime import datetime
 
 YOUBIKE_API = "https://tcgbusfs.blob.core.windows.net/dotapp/youbike/v2/youbike_immediate.json"
-BUS_ROUTE_API = "https://tcgbusfs.blob.core.windows.net/busfs/GetBusInfo.json"
-BUS_ARRIVAL_API = "https://tcgbusfs.blob.core.windows.net/busfs/GetEstimateTime.json"
+BUS_ESTIMATE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetEstimateTime.gz"
+BUS_STOP_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetStop.gz"
 
 MRT_STATIONS = [
     {"station_name": "台大醫院", "line": "淡水信義線", "lat": 25.0424, "lng": 121.5165},
@@ -23,16 +25,21 @@ MRT_STATIONS = [
 TARGET_ROUTES = ["0東", "1", "2", "3", "5", "15", "20", "22", "30", "37",
                  "52", "74", "111", "204", "208", "214", "253", "295"]
 
+def fetch_gz(url):
+    resp = requests.get(url, timeout=15)
+    resp.raise_for_status()
+    return json.loads(gzip.decompress(resp.content).decode("utf-8"))
+
 def extract_youbike():
     resp = requests.get(YOUBIKE_API, timeout=10)
     resp.raise_for_status()
     return resp.json()
 
-def extract_bus_arrivals():
-    resp = requests.get(BUS_ARRIVAL_API, timeout=10)
-    resp.raise_for_status()
-    data = resp.json()
-    return data.get("BusInfo", [])
+def extract_bus():
+    estimates = fetch_gz(BUS_ESTIMATE_API)
+    stops = fetch_gz(BUS_STOP_API)
+    stop_map = {str(s["Id"]): s.get("nameZh", "") for s in stops}
+    return estimates, stop_map
 
 def transform_youbike(raw):
     stations = []
@@ -57,21 +64,23 @@ def transform_youbike(raw):
         snapshots.append(snapshot)
     return stations, snapshots
 
-def transform_bus(raw):
+def transform_bus(estimates, stop_map):
     arrivals = []
-    for item in raw:
-        route = item.get("routeid", "")
-        if route not in TARGET_ROUTES:
+    for item in estimates:
+        route_id = str(item.get("RouteID", ""))
+        if route_id not in TARGET_ROUTES:
             continue
+        stop_id = str(item.get("StopID", ""))
+        stop_name = stop_map.get(stop_id, stop_id)
         try:
             est = int(item.get("EstimateTime", -1))
         except (ValueError, TypeError):
             est = -1
         arrivals.append({
-            "route_id": route,
-            "stop_name": item.get("stopname", ""),
+            "route_id": route_id,
+            "stop_name": stop_name,
             "estimate_time": est,
-            "plate_numb": item.get("PlateNumb", ""),
+            "plate_numb": "",
         })
     return arrivals
 
@@ -94,7 +103,6 @@ def load_youbike(stations, snapshots):
                 VALUES
                     (:station_id, :station_name, :area, :lat, :lng, :total_spaces)
                 ON CONFLICT (station_id) DO UPDATE SET
-                    available_bikes = EXCLUDED.available_bikes,
                     total_spaces = EXCLUDED.total_spaces
             """), s)
         now = datetime.utcnow()
@@ -143,8 +151,8 @@ def run_etl():
     except Exception as e:
         print(f"  YouBike ETL 失敗: {e}")
     try:
-        raw_bus = extract_bus_arrivals()
-        arrivals = transform_bus(raw_bus)
+        estimates, stop_map = extract_bus()
+        arrivals = transform_bus(estimates, stop_map)
         load_bus(arrivals)
         print(f"  公車: {len(arrivals)} 筆到站資料")
     except Exception as e:
