@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: taipei-transport-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: taipei-transport-db
+          property: connectionString
+
+  - type: web
+    name: taipei-transport-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://taipei-transport-backend.onrender.com
+
+databases:
+  - name: taipei-transport-db
+    plan: free
+    databaseName: taipei_transport
