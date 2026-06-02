@@ -8,6 +8,7 @@ from datetime import datetime
 YOUBIKE_API = "https://tcgbusfs.blob.core.windows.net/dotapp/youbike/v2/youbike_immediate.json"
 BUS_ESTIMATE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetEstimateTime.gz"
 BUS_STOP_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetStop.gz"
+BUS_ROUTE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetRoute.gz"
 
 MRT_STATIONS = [
     {"station_name": "台大醫院", "line": "淡水信義線", "lat": 25.0424, "lng": 121.5165},
@@ -22,13 +23,17 @@ MRT_STATIONS = [
     {"station_name": "忠孝敦化", "line": "板南線", "lat": 25.0408, "lng": 121.5509},
 ]
 
-TARGET_ROUTES = ["0東", "1", "2", "3", "5", "15", "20", "22", "30", "37",
-                 "52", "74", "111", "204", "208", "214", "253", "295"]
+TARGET_ROUTE_NAMES = ["0東", "1", "2", "3", "5", "15", "20", "22", "30", "37",
+                      "52", "74", "111", "204", "208", "214", "253", "295"]
 
 def fetch_gz(url):
     resp = requests.get(url, timeout=15)
     resp.raise_for_status()
-    return json.loads(gzip.decompress(resp.content).decode("utf-8"))
+    data = json.loads(gzip.decompress(resp.content).decode("utf-8"))
+    # 資料包在 BusInfo 裡
+    if isinstance(data, dict) and "BusInfo" in data:
+        return data["BusInfo"]
+    return data
 
 def extract_youbike():
     resp = requests.get(YOUBIKE_API, timeout=10)
@@ -36,10 +41,22 @@ def extract_youbike():
     return resp.json()
 
 def extract_bus():
+    routes = fetch_gz(BUS_ROUTE_API)
+    # 建立路線名稱 -> RouteID 的對應表
+    route_id_map = {}
+    for r in routes:
+        name = r.get("nameZh", "").strip()
+        rid = r.get("Id")
+        if name in TARGET_ROUTE_NAMES and rid:
+            route_id_map[int(rid)] = name
+    
     estimates = fetch_gz(BUS_ESTIMATE_API)
     stops = fetch_gz(BUS_STOP_API)
-    stop_map = {str(s["Id"]): s.get("nameZh", "") for s in stops}
-    return estimates, stop_map
+    
+    # 建立 StopID -> 站名對應表
+    stop_map = {int(s["Id"]): s.get("nameZh", "") for s in stops}
+    
+    return estimates, stop_map, route_id_map
 
 def transform_youbike(raw):
     stations = []
@@ -64,20 +81,21 @@ def transform_youbike(raw):
         snapshots.append(snapshot)
     return stations, snapshots
 
-def transform_bus(estimates, stop_map):
+def transform_bus(estimates, stop_map, route_id_map):
     arrivals = []
     for item in estimates:
-        route_id = str(item.get("RouteID", ""))
-        if route_id not in TARGET_ROUTES:
+        route_id = int(item.get("RouteID", 0))
+        if route_id not in route_id_map:
             continue
-        stop_id = str(item.get("StopID", ""))
-        stop_name = stop_map.get(stop_id, stop_id)
+        route_name = route_id_map[route_id]
+        stop_id = int(item.get("StopID", 0))
+        stop_name = stop_map.get(stop_id, str(stop_id))
         try:
             est = int(item.get("EstimateTime", -1))
         except (ValueError, TypeError):
             est = -1
         arrivals.append({
-            "route_id": route_id,
+            "route_id": route_name,
             "stop_name": stop_name,
             "estimate_time": est,
             "plate_numb": "",
@@ -151,10 +169,10 @@ def run_etl():
     except Exception as e:
         print(f"  YouBike ETL 失敗: {e}")
     try:
-        estimates, stop_map = extract_bus()
-        arrivals = transform_bus(estimates, stop_map)
+        estimates, stop_map, route_id_map = extract_bus()
+        arrivals = transform_bus(estimates, stop_map, route_id_map)
         load_bus(arrivals)
-        print(f"  公車: {len(arrivals)} 筆到站資料")
+        print(f"  公車: {len(arrivals)} 筆到站資料（{len(route_id_map)} 條路線）")
     except Exception as e:
         print(f"  公車 ETL 失敗: {e}")
     try:
