@@ -19,128 +19,126 @@ function waitColor(seconds) {
 
 export default function NearbyPanel({ nearbyData, selectedMrt, activeShape, onSelectShape, apiBase }) {
   const [goBack, setGoBack] = useState('0')
-  const [busArrivals, setBusArrivals] = useState([])
+  const [stopArrivals, setStopArrivals] = useState({}) // { stop_name: [arrivals] }
   const [activeStop, setActiveStop] = useState(null)
 
-  const busStops = nearbyData?.bus_stops || []
-  const youbike = nearbyData?.youbike || []
+  // 把 bus_stops 去重（同站名只保留一筆，取最近的）
+  const rawStops = nearbyData?.bus_stops || []
+  const stopsMap = {}
+  for (const s of rawStops) {
+    if (!stopsMap[s.stop_name] || s.distance < stopsMap[s.stop_name].distance) {
+      stopsMap[s.stop_name] = s
+    }
+  }
+  const busStops = Object.values(stopsMap).sort((a, b) => a.distance - b.distance)
+
+  useEffect(() => {
+    setActiveStop(null)
+    setStopArrivals({})
+  }, [selectedMrt])
 
   useEffect(() => {
     if (!activeStop) return
     const fetch = () => {
       axios.get(`${apiBase}/api/bus/arrivals`, {
-        params: { stop_name: activeStop.stop_name, go_back: goBack }
-      }).then(r => setBusArrivals(r.data)).catch(() => {})
+        params: { stop_name: activeStop, go_back: goBack }
+      }).then(r => {
+        setStopArrivals(prev => ({ ...prev, [activeStop]: r.data }))
+      }).catch(() => {})
     }
     fetch()
-    const id = setInterval(fetch, 3 * 60 * 1000)
+    const id = setInterval(fetch, 1 * 60 * 1000)
     return () => clearInterval(id)
   }, [activeStop, goBack])
 
-  const s = { card: { background: '#12141e', borderRadius: '8px', border: '1px solid #2a2d3a', marginBottom: '8px' } }
+  const handleClickStop = (stopName) => {
+    if (activeStop === stopName) {
+      setActiveStop(null)
+    } else {
+      setActiveStop(stopName)
+    }
+  }
 
   return (
-    <div style={{ background: '#1a1d27', borderRadius: '12px', border: '1px solid #2a2d3a', padding: '14px', flex: 1 }}>
-      {/* 捷運站標題 */}
-      <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', marginBottom: '14px' }}>
+    <div style={{ background: '#1a1d27', borderRadius: '12px', border: '1px solid #2a2d3a', padding: '14px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* 標題 */}
+      <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', marginBottom: '14px', flexShrink: 0 }}>
         📍 {selectedMrt.station_name}站 附近 1 公里
       </div>
 
-      {/* YouBike 區塊 */}
-      <div style={{ fontSize: '12px', color: '#888', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-        YouBike 站點（{youbike.length}）
+      {/* 去程/返程切換 */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexShrink: 0 }}>
+        {['0', '1'].map(dir => (
+          <button key={dir} onClick={() => { setGoBack(dir); setStopArrivals({}) }} style={{
+            padding: '5px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 600,
+            background: goBack === dir ? '#60a5fa' : '#2a2d3a',
+            color: goBack === dir ? '#000' : '#aaa',
+          }}>
+            {dir === '0' ? '去程' : '返程'}
+          </button>
+        ))}
       </div>
-      {youbike.length === 0 ? (
-        <div style={{ color: '#555', fontSize: '12px', marginBottom: '14px' }}>附近無 YouBike 站</div>
-      ) : (
-        <div style={{ marginBottom: '14px' }}>
-          {youbike.slice(0, 5).map(s => {
-            const rate = s.total_spaces > 0 ? Math.round(s.available_bikes / s.total_spaces * 100) : 0
-            const color = rate >= 50 ? '#22c55e' : rate >= 20 ? '#f59e0b' : '#ef4444'
-            return (
-              <div key={s.station_id} style={{ background: '#12141e', borderRadius: '8px', border: '1px solid #2a2d3a', padding: '8px 12px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: '12px', color: '#ddd' }}>{s.station_name.replace('YouBike2.0_', '')}</div>
-                  <div style={{ fontSize: '11px', color: '#555', marginTop: '2px' }}>{s.distance} 公尺</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color }}>{s.available_bikes ?? '-'} 台</div>
-                  <div style={{ fontSize: '10px', color: '#555' }}>可借 / {s.available_spaces ?? '-'} 格可還</div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
 
-      {/* 公車區塊 */}
-      <div style={{ fontSize: '12px', color: '#888', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+      {/* 公車站列表（可滾動）*/}
+      <div style={{ fontSize: '12px', color: '#888', fontWeight: 600, marginBottom: '8px', flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         附近公車站（{busStops.length}）
       </div>
 
-      {busStops.length === 0 ? (
-        <div style={{ color: '#555', fontSize: '12px' }}>附近無公車站資料</div>
-      ) : (
-        <>
-          {/* 去程/返程切換 */}
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
-            {['0', '1'].map(dir => (
-              <button key={dir} onClick={() => setGoBack(dir)} style={{
-                padding: '4px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 500,
-                background: goBack === dir ? '#60a5fa' : '#2a2d3a',
-                color: goBack === dir ? '#000' : '#aaa',
-              }}>
-                {dir === '0' ? '去程' : '返程'}
-              </button>
-            ))}
-          </div>
+      <div style={{ overflowY: 'auto', flex: 1 }}>
+        {busStops.length === 0 ? (
+          <div style={{ color: '#555', fontSize: '12px' }}>載入中...</div>
+        ) : (
+          busStops.map((stop, i) => {
+            const isActive = activeStop === stop.stop_name
+            const arrivals = stopArrivals[stop.stop_name] || []
+            return (
+              <div key={i}
+                onClick={() => handleClickStop(stop.stop_name)}
+                style={{
+                  background: '#12141e',
+                  borderRadius: '8px',
+                  border: `1px solid ${isActive ? '#60a5fa' : '#2a2d3a'}`,
+                  padding: '8px 12px',
+                  marginBottom: '6px',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.15s',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#ddd', fontWeight: 500 }}>{stop.stop_name}</div>
+                  <div style={{ fontSize: '11px', color: '#555' }}>{stop.distance} 公尺</div>
+                </div>
 
-          {/* 公車站列表 */}
-          {busStops.slice(0, 6).map((stop, i) => (
-            <div key={i}
-              onClick={() => setActiveStop(activeStop?.stop_name === stop.stop_name ? null : stop)}
-              style={{
-                background: '#12141e', borderRadius: '8px',
-                border: `1px solid ${activeStop?.stop_name === stop.stop_name ? '#60a5fa' : '#2a2d3a'}`,
-                padding: '8px 12px', marginBottom: '6px', cursor: 'pointer'
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: '12px', color: '#ddd' }}>{stop.stop_name}</div>
-                <div style={{ fontSize: '11px', color: '#555' }}>{stop.distance} 公尺</div>
-              </div>
-
-              {/* 展開：該站到站時間 */}
-              {activeStop?.stop_name === stop.stop_name && (
-                <div style={{ marginTop: '8px', borderTop: '1px solid #2a2d3a', paddingTop: '8px' }}>
-                  {busArrivals.length === 0 ? (
-                    <div style={{ fontSize: '11px', color: '#555' }}>無到站資料</div>
-                  ) : (
-                    busArrivals.map((a, j) => (
-                      <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {isActive && (
+                  <div style={{ marginTop: '8px', borderTop: '1px solid #2a2d3a', paddingTop: '8px' }}>
+                    {arrivals.length === 0 ? (
+                      <div style={{ fontSize: '11px', color: '#555' }}>無到站資料</div>
+                    ) : (
+                      arrivals.map((a, j) => (
+                        <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
                           <span
                             onClick={(e) => { e.stopPropagation(); onSelectShape(a.route_id, goBack) }}
                             style={{
-                              fontSize: '11px', fontWeight: 700, color: activeShape?.routeName === a.route_id ? '#facc15' : '#60a5fa',
+                              fontSize: '12px', fontWeight: 700,
+                              color: activeShape?.routeName === a.route_id ? '#facc15' : '#60a5fa',
                               cursor: 'pointer', textDecoration: 'underline'
                             }}
                           >
                             {a.route_id} 路
                           </span>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: waitColor(a.estimate_time) }}>
+                            {formatWait(a.estimate_time)}
+                          </span>
                         </div>
-                        <span style={{ fontSize: '12px', fontWeight: 600, color: waitColor(a.estimate_time) }}>
-                          {formatWait(a.estimate_time)}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </>
-      )}
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })
+        )}
+      </div>
     </div>
   )
 }

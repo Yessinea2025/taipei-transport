@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Polyline, Circle, Tooltip, useMap } from 'react-leaflet'
+import { useEffect, useState } from 'react'
+import { MapContainer, TileLayer, CircleMarker, Marker, Polyline, Circle, Tooltip, useMap } from 'react-leaflet'
+import L from 'leaflet'
 import axios from 'axios'
 
 function MapController({ selectedMrt }) {
@@ -20,14 +21,24 @@ function getBikeColor(rate) {
   return '#ef4444'
 }
 
+// 捷運站用方形圖示
+function makeSquareIcon(color, isSelected) {
+  const size = isSelected ? 14 : 10
+  const border = isSelected ? `3px solid #fff` : `2px solid ${color}`
+  return new L.DivIcon({
+    html: `<div style="width:${size}px;height:${size}px;background:${color};border:${border};border-radius:2px;transform:rotate(45deg);"></div>`,
+    iconSize: [size + 4, size + 4],
+    iconAnchor: [(size + 4) / 2, (size + 4) / 2],
+    className: '',
+  })
+}
+
 export default function TransportMap({ apiBase, selectedMrt, onSelectMrt, nearbyData, activeShape, onSelectYoubike }) {
   const [mrtStations, setMrtStations] = useState([])
 
   useEffect(() => {
     axios.get(`${apiBase}/api/mrt/stations`).then(r => setMrtStations(r.data)).catch(() => {})
   }, [])
-
-  const nearbyIds = new Set((nearbyData?.youbike || []).map(s => s.station_id))
 
   return (
     <MapContainer center={[25.045, 121.525]} zoom={13} style={{ height: '100%', width: '100%' }}>
@@ -37,27 +48,21 @@ export default function TransportMap({ apiBase, selectedMrt, onSelectMrt, nearby
       />
       <MapController selectedMrt={selectedMrt} />
 
-      {/* 捷運站 */}
+      {/* 捷運站 — 方形鑽石圖示 */}
       {mrtStations.map((s, i) => (
-        <CircleMarker
+        <Marker
           key={i}
-          center={[s.lat, s.lng]}
-          radius={7}
-          pathOptions={{
-            color: s.line_color,
-            fillColor: selectedMrt?.station_name === s.station_name ? '#fff' : s.line_color,
-            fillOpacity: selectedMrt?.station_name === s.station_name ? 1 : 0.85,
-            weight: selectedMrt?.station_name === s.station_name ? 3 : 1.5,
-          }}
+          position={[s.lat, s.lng]}
+          icon={makeSquareIcon(s.line_color, selectedMrt?.station_name === s.station_name)}
           eventHandlers={{ click: () => onSelectMrt(s) }}
         >
-          <Tooltip direction="top" offset={[0, -6]} opacity={0.95}>
+          <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
             <div style={{ fontSize: '12px' }}>
               <strong>{s.station_name}站</strong><br />
               <span style={{ color: '#aaa' }}>{s.line}</span>
             </div>
           </Tooltip>
-        </CircleMarker>
+        </Marker>
       ))}
 
       {/* 1公里範圍圈 */}
@@ -69,7 +74,7 @@ export default function TransportMap({ apiBase, selectedMrt, onSelectMrt, nearby
         />
       )}
 
-      {/* 附近 YouBike 站 */}
+      {/* 附近 YouBike 站 — 圓形 */}
       {(nearbyData?.youbike || []).map(s => {
         const rate = s.total_spaces > 0 ? (s.available_bikes / s.total_spaces) * 100 : 0
         const color = getBikeColor(rate)
