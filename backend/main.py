@@ -1,9 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text
 from database import engine, init_db
 from etl import run_etl, load_mrt_stations
+import math
 import atexit
 
 app = FastAPI(title="台北交通儀表板 API")
@@ -31,6 +32,14 @@ atexit.register(lambda: scheduler.shutdown())
 def root():
     return {"status": "ok", "message": "台北交通儀表板 API"}
 
+@app.get("/api/mrt/stations")
+def get_mrt_stations():
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT station_name, line, line_color, lat, lng FROM mrt_stations
+        """)).fetchall()
+    return [dict(r._mapping) for r in rows]
+
 @app.get("/api/youbike/stations")
 def get_youbike_stations():
     with engine.connect() as conn:
@@ -50,6 +59,100 @@ def get_youbike_stations():
         """)).fetchall()
     return [dict(r._mapping) for r in rows]
 
+@app.get("/api/nearby")
+def get_nearby(lat: float, lng: float, radius: int = 1000):
+    def haversine(lat1, lng1, lat2, lng2):
+        R = 6371000
+        phi1, phi2 = math.radians(lat1), math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lng2 - lng1)
+        a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+        return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+    with engine.connect() as conn:
+        # 附近 YouBike 站
+        youbike_rows = conn.execute(text("""
+            SELECT s.station_id, s.station_name, s.area, s.lat, s.lng,
+                   s.total_spaces, snap.available_bikes, snap.available_spaces
+            FROM youbike_stations s
+            LEFT JOIN LATERAL (
+                SELECT available_bikes, available_spaces
+                FROM youbike_snapshots
+                WHERE station_id = s.station_id
+                ORDER BY recorded_at DESC
+                LIMIT 1
+            ) snap ON true
+            WHERE s.lat BETWEEN :lat - 0.015 AND :lat + 0.015
+              AND s.lng BETWEEN :lng - 0.015 AND :lng + 0.015
+        """), {"lat": lat, "lng": lng}).fetchall()
+
+        # 附近公車站（從 bus_stops 表）
+        bus_rows = conn.execute(text("""
+            SELECT DISTINCT stop_name, lat, lng
+            FROM bus_stops
+            WHERE lat BETWEEN :lat - 0.015 AND :lat + 0.015
+              AND lng BETWEEN :lng - 0.015 AND :lng + 0.015
+        """), {"lat": lat, "lng": lng}).fetchall()
+
+    nearby_youbike = []
+    for r in youbike_rows:
+        d = haversine(lat, lng, r.lat, r.lng)
+        if d <= radius:
+            item = dict(r._mapping)
+            item["distance"] = round(d)
+            nearby_youbike.append(item)
+    nearby_youbike.sort(key=lambda x: x["distance"])
+
+    nearby_bus = []
+    for r in bus_rows:
+        d = haversine(lat, lng, r.lat, r.lng)
+        if d <= radius:
+            item = dict(r._mapping)
+            item["distance"] = round(d)
+            nearby_bus.append(item)
+    nearby_bus.sort(key=lambda x: x["distance"])
+
+    return {
+        "youbike": nearby_youbike[:20],
+        "bus_stops": nearby_bus[:20],
+    }
+
+@app.get("/api/bus/arrivals")
+def get_bus_arrivals(stop_name: str = None, route_id: str = None, go_back: str = None):
+    with engine.connect() as conn:
+        conditions = ["recorded_at > NOW() - INTERVAL '10 minutes'"]
+        params = {}
+        if stop_name:
+            conditions.append("stop_name = :stop_name")
+            params["stop_name"] = stop_name
+        if route_id:
+            conditions.append("route_id = :route_id")
+            params["route_id"] = route_id
+        if go_back is not None:
+            conditions.append("go_back = :go_back")
+            params["go_back"] = go_back
+        where = " AND ".join(conditions)
+        rows = conn.execute(text(f"""
+            SELECT DISTINCT ON (route_id, stop_name, go_back)
+                route_id, stop_name, estimate_time, go_back, recorded_at
+            FROM bus_arrivals
+            WHERE {where}
+            ORDER BY route_id, stop_name, go_back, recorded_at DESC
+        """), params).fetchall()
+    return [dict(r._mapping) for r in rows]
+
+@app.get("/api/bus/shape/{route_name}")
+def get_bus_shape(route_name: str, go_back: str = "0"):
+    with engine.connect() as conn:
+        row = conn.execute(text("""
+            SELECT coordinates FROM bus_shapes
+            WHERE route_name = :route_name AND go_back = :go_back
+            LIMIT 1
+        """), {"route_name": route_name, "go_back": go_back}).fetchone()
+    if not row:
+        return {"coordinates": []}
+    return {"coordinates": row.coordinates}
+
 @app.get("/api/youbike/trend/{station_id}")
 def get_youbike_trend(station_id: str, hours: int = 24):
     with engine.connect() as conn:
@@ -65,90 +168,6 @@ def get_youbike_trend(station_id: str, hours: int = 24):
             GROUP BY time_bucket
             ORDER BY time_bucket
         """), {"station_id": station_id, "hours": hours}).fetchall()
-    return [dict(r._mapping) for r in rows]
-
-@app.get("/api/youbike/heatmap")
-def get_youbike_heatmap():
-    with engine.connect() as conn:
-        rows = conn.execute(text("""
-            SELECT s.lat, s.lng, s.station_name,
-                   snap.available_bikes, s.total_spaces,
-                   CASE WHEN s.total_spaces > 0
-                        THEN ROUND(snap.available_bikes::numeric / s.total_spaces * 100)
-                        ELSE 0 END AS fill_rate
-            FROM youbike_stations s
-            LEFT JOIN LATERAL (
-                SELECT available_bikes
-                FROM youbike_snapshots
-                WHERE station_id = s.station_id
-                ORDER BY recorded_at DESC
-                LIMIT 1
-            ) snap ON true
-            WHERE s.lat IS NOT NULL
-        """)).fetchall()
-    return [dict(r._mapping) for r in rows]
-
-@app.get("/api/youbike/area-summary")
-def get_area_summary():
-    with engine.connect() as conn:
-        rows = conn.execute(text("""
-            SELECT s.area,
-                   COUNT(*) AS station_count,
-                   SUM(snap.available_bikes) AS total_available,
-                   SUM(s.total_spaces) AS total_capacity
-            FROM youbike_stations s
-            LEFT JOIN LATERAL (
-                SELECT available_bikes
-                FROM youbike_snapshots
-                WHERE station_id = s.station_id
-                ORDER BY recorded_at DESC
-                LIMIT 1
-            ) snap ON true
-            GROUP BY s.area
-            ORDER BY total_available DESC
-        """)).fetchall()
-    return [dict(r._mapping) for r in rows]
-
-@app.get("/api/bus/arrivals")
-def get_bus_arrivals(route_id: str = None):
-    with engine.connect() as conn:
-        if route_id:
-            rows = conn.execute(text("""
-                SELECT route_id, stop_name, estimate_time, plate_numb, recorded_at
-                FROM bus_arrivals
-                WHERE route_id = :route_id
-                  AND recorded_at > NOW() - INTERVAL '10 minutes'
-                ORDER BY stop_name, estimate_time
-            """), {"route_id": route_id}).fetchall()
-        else:
-            rows = conn.execute(text("""
-                SELECT DISTINCT ON (route_id, stop_name)
-                    route_id, stop_name, estimate_time, plate_numb, recorded_at
-                FROM bus_arrivals
-                WHERE recorded_at > NOW() - INTERVAL '10 minutes'
-                ORDER BY route_id, stop_name, recorded_at DESC
-            """)).fetchall()
-    return [dict(r._mapping) for r in rows]
-
-@app.get("/api/bus/busy-hours")
-def get_bus_busy_hours():
-    with engine.connect() as conn:
-        rows = conn.execute(text("""
-            SELECT EXTRACT(HOUR FROM recorded_at) AS hour,
-                   ROUND(AVG(CASE WHEN estimate_time >= 0 THEN estimate_time END)) AS avg_wait
-            FROM bus_arrivals
-            WHERE recorded_at > NOW() - INTERVAL '7 days'
-            GROUP BY hour
-            ORDER BY hour
-        """)).fetchall()
-    return [dict(r._mapping) for r in rows]
-
-@app.get("/api/mrt/stations")
-def get_mrt_stations():
-    with engine.connect() as conn:
-        rows = conn.execute(text("""
-            SELECT station_name, line, lat, lng FROM mrt_stations
-        """)).fetchall()
     return [dict(r._mapping) for r in rows]
 
 @app.get("/api/status")
