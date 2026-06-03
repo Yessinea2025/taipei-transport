@@ -16,7 +16,7 @@ export default function StatusBar({ status, lastRefresh }) {
     }}>
       <span>
         <span style={{ color: '#22c55e', marginRight: '6px' }}>●</span>
-        即時更新中（每3分鐘）
+        即時更新中（每1分鐘）
       </span>
       <span>YouBike 快照：<strong style={{ color: '#aaa' }}>{status?.youbike_recent_records ?? '—'}</strong> 筆</span>
       <span>公車資料：<strong style={{ color: '#aaa' }}>{status?.bus_recent_records ?? '—'}</strong> 筆</span>

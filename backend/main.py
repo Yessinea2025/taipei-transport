@@ -23,7 +23,7 @@ def startup():
     init_db()
     load_mrt_stations()
     run_etl()
-    scheduler.add_job(run_etl, "interval", minutes=3, id="etl_job")
+    scheduler.add_job(run_etl, "interval", minutes=1, id="etl_job")
     scheduler.start()
 
 atexit.register(lambda: scheduler.shutdown())

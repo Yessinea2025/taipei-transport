@@ -19,7 +19,7 @@ export default function App() {
     const fetchStatus = () =>
       axios.get(`${API}/api/status`).then(r => setStatus(r.data)).catch(() => {})
     fetchStatus()
-    const id = setInterval(fetchStatus, 3 * 60 * 1000)
+    const id = setInterval(fetchStatus, 1 * 60 * 1000)
     return () => clearInterval(id)
   }, [])
 
