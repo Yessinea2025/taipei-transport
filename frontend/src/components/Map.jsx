@@ -3,15 +3,17 @@ import { MapContainer, TileLayer, CircleMarker, Marker, Polyline, Circle, Toolti
 import L from 'leaflet'
 import axios from 'axios'
 
-function MapController({ selectedMrt }) {
+function MapController({ selectedMrt, selectedExit }) {
   const map = useMap()
   useEffect(() => {
-    if (selectedMrt) {
+    if (selectedExit) {
+      map.flyTo([selectedExit.lat, selectedExit.lng], 16, { duration: 1 })
+    } else if (selectedMrt) {
       map.flyTo([selectedMrt.lat, selectedMrt.lng], 15, { duration: 1 })
     } else {
       map.flyTo([25.045, 121.525], 13, { duration: 1 })
     }
-  }, [selectedMrt])
+  }, [selectedMrt, selectedExit])
   return null
 }
 
@@ -21,19 +23,40 @@ function getBikeColor(rate) {
   return '#ef4444'
 }
 
-// 捷運站用方形圖示
-function makeSquareIcon(color, isSelected) {
+function makeSquareIcon(colors, isSelected) {
   const size = isSelected ? 14 : 10
-  const border = isSelected ? `3px solid #fff` : `2px solid ${color}`
+  if (colors.length === 1) {
+    const border = isSelected ? `3px solid #fff` : `2px solid ${colors[0]}`
+    return new L.DivIcon({
+      html: `<div style="width:${size}px;height:${size}px;background:${colors[0]};border:${border};border-radius:2px;transform:rotate(45deg);"></div>`,
+      iconSize: [size + 6, size + 6],
+      iconAnchor: [(size + 6) / 2, (size + 6) / 2],
+      className: '',
+    })
+  }
+  // 交叉站：左右各一半顏色
+  const [c1, c2] = colors
   return new L.DivIcon({
-    html: `<div style="width:${size}px;height:${size}px;background:${color};border:${border};border-radius:2px;transform:rotate(45deg);"></div>`,
-    iconSize: [size + 4, size + 4],
-    iconAnchor: [(size + 4) / 2, (size + 4) / 2],
+    html: `<div style="width:${size}px;height:${size}px;border-radius:2px;transform:rotate(45deg);overflow:hidden;border:${isSelected ? '3px solid #fff' : '2px solid #fff'};display:flex;">
+      <div style="flex:1;background:${c1};"></div>
+      <div style="flex:1;background:${c2};"></div>
+    </div>`,
+    iconSize: [size + 6, size + 6],
+    iconAnchor: [(size + 6) / 2, (size + 6) / 2],
     className: '',
   })
 }
 
-export default function TransportMap({ apiBase, selectedMrt, onSelectMrt, nearbyData, activeShape, onSelectYoubike }) {
+function makeExitIcon(isSelected) {
+  return new L.DivIcon({
+    html: `<div style="width:20px;height:20px;background:${isSelected ? '#facc15' : '#fff'};border-radius:50%;border:2px solid ${isSelected ? '#facc15' : '#888'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#000;">出</div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    className: '',
+  })
+}
+
+export default function TransportMap({ apiBase, selectedMrt, selectedExit, exits, onSelectMrt, onSelectExit, nearbyData, activeShape, onSelectYoubike }) {
   const [mrtStations, setMrtStations] = useState([])
 
   useEffect(() => {
@@ -42,18 +65,15 @@ export default function TransportMap({ apiBase, selectedMrt, onSelectMrt, nearby
 
   return (
     <MapContainer center={[25.045, 121.525]} zoom={13} style={{ height: '100%', width: '100%' }}>
-      <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        attribution='&copy; CARTO'
-      />
-      <MapController selectedMrt={selectedMrt} />
+      <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='&copy; CARTO' />
+      <MapController selectedMrt={selectedMrt} selectedExit={selectedExit} />
 
-      {/* 捷運站 — 方形鑽石圖示 */}
+      {/* 捷運站 */}
       {mrtStations.map((s, i) => (
         <Marker
           key={i}
           position={[s.lat, s.lng]}
-          icon={makeSquareIcon(s.line_color, selectedMrt?.station_name === s.station_name)}
+          icon={makeSquareIcon(s.colors, selectedMrt?.station_name === s.station_name)}
           eventHandlers={{ click: () => onSelectMrt(s) }}
         >
           <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
@@ -65,16 +85,32 @@ export default function TransportMap({ apiBase, selectedMrt, onSelectMrt, nearby
         </Marker>
       ))}
 
+      {/* 出口標記 */}
+      {exits.map((e, i) => (
+        <Marker
+          key={`exit-${i}`}
+          position={[e.lat, e.lng]}
+          icon={makeExitIcon(selectedExit?.exit_name === e.exit_name)}
+          eventHandlers={{ click: () => onSelectExit(e) }}
+        >
+          <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
+            <div style={{ fontSize: '12px' }}>
+              <strong>{e.exit_name}</strong>
+            </div>
+          </Tooltip>
+        </Marker>
+      ))}
+
       {/* 1公里範圍圈 */}
-      {selectedMrt && (
+      {selectedExit && (
         <Circle
-          center={[selectedMrt.lat, selectedMrt.lng]}
+          center={[selectedExit.lat, selectedExit.lng]}
           radius={1000}
           pathOptions={{ color: '#ffffff', fillColor: '#ffffff', fillOpacity: 0.04, weight: 1, dashArray: '6 4' }}
         />
       )}
 
-      {/* 附近 YouBike 站 — 圓形 */}
+      {/* 附近 YouBike */}
       {(nearbyData?.youbike || []).map(s => {
         const rate = s.total_spaces > 0 ? (s.available_bikes / s.total_spaces) * 100 : 0
         const color = getBikeColor(rate)

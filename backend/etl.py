@@ -11,6 +11,7 @@ BUS_ESTIMATE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetEstimateTi
 BUS_STOP_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetStop.gz"
 BUS_ROUTE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetRoute.gz"
 BUS_SHAPE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetBusShape.gz"
+MRT_EXIT_API = "https://data.taipei/api/v1/dataset/307a7f61-e302-4108-a817-877ccbfca7c1?scope=resourceAquire&limit=500"
 
 TARGET_ROUTE_NAMES = ["0東", "1", "2", "3", "5", "15", "20", "22", "30", "37",
                       "52", "74", "111", "204", "208", "214", "253", "295"]
@@ -106,32 +107,46 @@ MRT_STATIONS = [
     {"station_name":"永安市場","station_code":"O18","line":"中和新蘆線","line_color":"#f8a217","lat":24.9983,"lng":121.5081},
     {"station_name":"景安","station_code":"O19","line":"中和新蘆線","line_color":"#f8a217","lat":24.9934,"lng":121.5081},
     {"station_name":"南勢角","station_code":"O20","line":"中和新蘆線","line_color":"#f8a217","lat":24.9873,"lng":121.5081},
-    # 文湖線 (棕)
-    {"station_name":"動物園","station_code":"BR01","line":"文湖線","line_color":"#c48b1f","lat":24.9990,"lng":121.5780},
-    {"station_name":"木柵","station_code":"BR02","line":"文湖線","line_color":"#c48b1f","lat":25.0013,"lng":121.5682},
-    {"station_name":"萬芳社區","station_code":"BR03","line":"文湖線","line_color":"#c48b1f","lat":25.0091,"lng":121.5622},
-    {"station_name":"萬芳醫院","station_code":"BR04","line":"文湖線","line_color":"#c48b1f","lat":25.0143,"lng":121.5622},
-    {"station_name":"辛亥","station_code":"BR05","line":"文湖線","line_color":"#c48b1f","lat":25.0212,"lng":121.5573},
-    {"station_name":"麟光","station_code":"BR06","line":"文湖線","line_color":"#c48b1f","lat":25.0262,"lng":121.5573},
-    {"station_name":"六張犁","station_code":"BR07","line":"文湖線","line_color":"#c48b1f","lat":25.0289,"lng":121.5509},
-    {"station_name":"科技大樓","station_code":"BR08","line":"文湖線","line_color":"#c48b1f","lat":25.0261,"lng":121.5436},
-    {"station_name":"大安","station_code":"BR09","line":"文湖線","line_color":"#c48b1f","lat":25.0330,"lng":121.5432},
-    {"station_name":"忠孝復興","station_code":"BR10","line":"文湖線","line_color":"#c48b1f","lat":25.0416,"lng":121.5444},
-    {"station_name":"南京復興","station_code":"BR11","line":"文湖線","line_color":"#c48b1f","lat":25.0519,"lng":121.5432},
-    {"station_name":"中山國中","station_code":"BR12","line":"文湖線","line_color":"#c48b1f","lat":25.0572,"lng":121.5502},
-    {"station_name":"松山機場","station_code":"BR13","line":"文湖線","line_color":"#c48b1f","lat":25.0631,"lng":121.5502},
-    {"station_name":"大直","station_code":"BR14","line":"文湖線","line_color":"#c48b1f","lat":25.0783,"lng":121.5502},
-    {"station_name":"劍南路","station_code":"BR15","line":"文湖線","line_color":"#c48b1f","lat":25.0850,"lng":121.5573},
-    {"station_name":"西湖","station_code":"BR16","line":"文湖線","line_color":"#c48b1f","lat":25.0850,"lng":121.5780},
-    {"station_name":"港墘","station_code":"BR17","line":"文湖線","line_color":"#c48b1f","lat":25.0850,"lng":121.5879},
-    {"station_name":"文德","station_code":"BR18","line":"文湖線","line_color":"#c48b1f","lat":25.0850,"lng":121.5975},
-    {"station_name":"內湖","station_code":"BR19","line":"文湖線","line_color":"#c48b1f","lat":25.0850,"lng":121.6072},
-    {"station_name":"大湖公園","station_code":"BR20","line":"文湖線","line_color":"#c48b1f","lat":25.0850,"lng":121.6178},
-    {"station_name":"葫洲","station_code":"BR21","line":"文湖線","line_color":"#c48b1f","lat":25.0783,"lng":121.6280},
-    {"station_name":"東湖","station_code":"BR22","line":"文湖線","line_color":"#c48b1f","lat":25.0715,"lng":121.6280},
-    {"station_name":"南港軟體園區","station_code":"BR23","line":"文湖線","line_color":"#c48b1f","lat":25.0631,"lng":121.6178},
-    {"station_name":"南港展覽館","station_code":"BR24","line":"文湖線","line_color":"#c48b1f","lat":25.0553,"lng":121.6178},
+    # 文湖線 (深棕)
+    {"station_name":"動物園","station_code":"BR01","line":"文湖線","line_color":"#a05a2c","lat":24.9990,"lng":121.5780},
+    {"station_name":"木柵","station_code":"BR02","line":"文湖線","line_color":"#a05a2c","lat":25.0013,"lng":121.5682},
+    {"station_name":"萬芳社區","station_code":"BR03","line":"文湖線","line_color":"#a05a2c","lat":25.0091,"lng":121.5622},
+    {"station_name":"萬芳醫院","station_code":"BR04","line":"文湖線","line_color":"#a05a2c","lat":25.0143,"lng":121.5622},
+    {"station_name":"辛亥","station_code":"BR05","line":"文湖線","line_color":"#a05a2c","lat":25.0212,"lng":121.5573},
+    {"station_name":"麟光","station_code":"BR06","line":"文湖線","line_color":"#a05a2c","lat":25.0262,"lng":121.5573},
+    {"station_name":"六張犁","station_code":"BR07","line":"文湖線","line_color":"#a05a2c","lat":25.0289,"lng":121.5509},
+    {"station_name":"科技大樓","station_code":"BR08","line":"文湖線","line_color":"#a05a2c","lat":25.0261,"lng":121.5436},
+    {"station_name":"大安","station_code":"BR09","line":"文湖線","line_color":"#a05a2c","lat":25.0330,"lng":121.5432},
+    {"station_name":"忠孝復興","station_code":"BR10","line":"文湖線","line_color":"#a05a2c","lat":25.0416,"lng":121.5444},
+    {"station_name":"南京復興","station_code":"BR11","line":"文湖線","line_color":"#a05a2c","lat":25.0519,"lng":121.5432},
+    {"station_name":"中山國中","station_code":"BR12","line":"文湖線","line_color":"#a05a2c","lat":25.0572,"lng":121.5502},
+    {"station_name":"松山機場","station_code":"BR13","line":"文湖線","line_color":"#a05a2c","lat":25.0631,"lng":121.5502},
+    {"station_name":"大直","station_code":"BR14","line":"文湖線","line_color":"#a05a2c","lat":25.0783,"lng":121.5502},
+    {"station_name":"劍南路","station_code":"BR15","line":"文湖線","line_color":"#a05a2c","lat":25.0850,"lng":121.5573},
+    {"station_name":"西湖","station_code":"BR16","line":"文湖線","line_color":"#a05a2c","lat":25.0850,"lng":121.5780},
+    {"station_name":"港墘","station_code":"BR17","line":"文湖線","line_color":"#a05a2c","lat":25.0850,"lng":121.5879},
+    {"station_name":"文德","station_code":"BR18","line":"文湖線","line_color":"#a05a2c","lat":25.0850,"lng":121.5975},
+    {"station_name":"內湖","station_code":"BR19","line":"文湖線","line_color":"#a05a2c","lat":25.0850,"lng":121.6072},
+    {"station_name":"大湖公園","station_code":"BR20","line":"文湖線","line_color":"#a05a2c","lat":25.0850,"lng":121.6178},
+    {"station_name":"葫洲","station_code":"BR21","line":"文湖線","line_color":"#a05a2c","lat":25.0783,"lng":121.6280},
+    {"station_name":"東湖","station_code":"BR22","line":"文湖線","line_color":"#a05a2c","lat":25.0715,"lng":121.6280},
+    {"station_name":"南港軟體園區","station_code":"BR23","line":"文湖線","line_color":"#a05a2c","lat":25.0631,"lng":121.6178},
+    {"station_name":"南港展覽館","station_code":"BR24","line":"文湖線","line_color":"#a05a2c","lat":25.0553,"lng":121.6178},
 ]
+
+# 交叉站（同一站名出現在多條路線）
+TRANSFER_STATIONS = {
+    "台北車站": ["#e3002c", "#0070bd"],
+    "忠孝新生": ["#008659", "#0070bd", "#f8a217"],
+    "忠孝復興": ["#008659", "#0070bd", "#a05a2c"],
+    "南京復興": ["#008659", "#a05a2c"],
+    "古亭":     ["#008659", "#f8a217"],
+    "民權西路": ["#e3002c", "#f8a217"],
+    "大安":     ["#e3002c", "#a05a2c"],
+    "東門":     ["#e3002c", "#008659"],
+    "中正紀念堂": ["#e3002c", "#008659"],
+    "南港展覽館": ["#0070bd", "#a05a2c"],
+}
 
 def fetch_gz(url):
     resp = requests.get(url, timeout=30)
@@ -149,15 +164,20 @@ def extract_youbike():
 def extract_bus():
     routes = fetch_gz(BUS_ROUTE_API)
     route_id_map = {}
+    route_destinations = {}
     for r in routes:
         name = r.get("nameZh", "").strip()
         rid = r.get("Id")
         if name in TARGET_ROUTE_NAMES and rid:
             route_id_map[int(rid)] = name
+            route_destinations[name] = {
+                "0": r.get("destinationZh", ""),
+                "1": r.get("departureZh", ""),
+            }
     estimates = fetch_gz(BUS_ESTIMATE_API)
     stops = fetch_gz(BUS_STOP_API)
     stop_map = {int(s["Id"]): s.get("nameZh", "") for s in stops}
-    return estimates, stop_map, route_id_map, stops
+    return estimates, stop_map, route_id_map, stops, route_destinations
 
 def parse_wkt_linestring(wkt):
     coords = []
@@ -217,6 +237,8 @@ def load_mrt_stations():
     with engine.connect() as conn:
         existing = conn.execute(text("SELECT COUNT(*) FROM mrt_stations")).scalar()
         if existing > 0:
+            conn.execute(text("UPDATE mrt_stations SET line_color = '#a05a2c' WHERE line = '文湖線'"))
+            conn.commit()
             return
         for s in MRT_STATIONS:
             conn.execute(text("""
@@ -226,6 +248,36 @@ def load_mrt_stations():
             """), s)
         conn.commit()
     print(f"  捷運站載入完成：{len(MRT_STATIONS)} 站")
+
+def load_mrt_exits():
+    with engine.connect() as conn:
+        existing = conn.execute(text("SELECT COUNT(*) FROM mrt_exits")).scalar()
+        if existing > 0:
+            return
+    try:
+        resp = requests.get(MRT_EXIT_API, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        results = data.get("result", {}).get("results", [])
+        with engine.connect() as conn:
+            for r in results:
+                try:
+                    conn.execute(text("""
+                        INSERT INTO mrt_exits (station_name, exit_name, exit_number, lat, lng)
+                        VALUES (:station_name, :exit_name, :exit_number, :lat, :lng)
+                    """), {
+                        "station_name": r.get("出口所在站名", ""),
+                        "exit_name": r.get("出口名稱", ""),
+                        "exit_number": r.get("出口編號", ""),
+                        "lat": float(r.get("緯度", 0)),
+                        "lng": float(r.get("經度", 0)),
+                    })
+                except Exception:
+                    continue
+            conn.commit()
+        print(f"  捷運出口載入完成：{len(results)} 筆")
+    except Exception as e:
+        print(f"  捷運出口載入失敗: {e}")
 
 def load_youbike(stations, snapshots):
     with engine.connect() as conn:
@@ -302,6 +354,24 @@ def load_bus_shapes(route_id_map):
     except Exception as e:
         print(f"  路線軌跡載入失敗: {e}")
 
+def load_route_destinations(route_destinations):
+    with engine.connect() as conn:
+        for route_name, dests in route_destinations.items():
+            for go_back, destination in dests.items():
+                if not destination:
+                    continue
+                conn.execute(text("""
+                    INSERT INTO route_destinations (route_name, go_back, destination)
+                    VALUES (:route_name, :go_back, :destination)
+                    ON CONFLICT (route_name, go_back) DO UPDATE SET
+                        destination = EXCLUDED.destination
+                """), {
+                    "route_name": route_name,
+                    "go_back": go_back,
+                    "destination": destination,
+                })
+        conn.commit()
+
 def load_bus(arrivals):
     with engine.connect() as conn:
         now = datetime.utcnow()
@@ -330,9 +400,10 @@ def run_etl():
     except Exception as e:
         print(f"  YouBike ETL 失敗: {e}")
     try:
-        estimates, stop_map, route_id_map, stops = extract_bus()
+        estimates, stop_map, route_id_map, stops, route_destinations = extract_bus()
         load_bus_stops(stops)
         load_bus_shapes(route_id_map)
+        load_route_destinations(route_destinations)
         arrivals = transform_bus(estimates, stop_map, route_id_map)
         load_bus(arrivals)
         print(f"  公車: {len(arrivals)} 筆到站資料")

@@ -82,5 +82,24 @@ def init_db():
                 UNIQUE(route_name, go_back)
             )
         """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS mrt_exits (
+                id SERIAL PRIMARY KEY,
+                station_name VARCHAR(100),
+                exit_name VARCHAR(100),
+                exit_number VARCHAR(10),
+                lat FLOAT,
+                lng FLOAT
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS route_destinations (
+                id SERIAL PRIMARY KEY,
+                route_name VARCHAR(50),
+                go_back VARCHAR(5),
+                destination VARCHAR(100),
+                UNIQUE(route_name, go_back)
+            )
+        """))
         conn.commit()
     print("資料庫初始化完成")

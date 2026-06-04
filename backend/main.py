@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text
 from database import engine, init_db
-from etl import run_etl, load_mrt_stations
+from etl import run_etl, load_mrt_stations, load_mrt_exits, TRANSFER_STATIONS
 import math
 import atexit
 
@@ -22,6 +22,7 @@ scheduler = BackgroundScheduler()
 def startup():
     init_db()
     load_mrt_stations()
+    load_mrt_exits()
     run_etl()
     scheduler.add_job(run_etl, "interval", minutes=1, id="etl_job")
     scheduler.start()
@@ -36,27 +37,29 @@ def root():
 def get_mrt_stations():
     with engine.connect() as conn:
         rows = conn.execute(text("""
-            SELECT station_name, line, line_color, lat, lng FROM mrt_stations
+            SELECT DISTINCT ON (station_name) station_name, line, line_color, lat, lng
+            FROM mrt_stations ORDER BY station_name, id
         """)).fetchall()
-    return [dict(r._mapping) for r in rows]
+    result = []
+    for r in rows:
+        item = dict(r._mapping)
+        # 交叉站加上所有路線顏色
+        if item["station_name"] in TRANSFER_STATIONS:
+            item["colors"] = TRANSFER_STATIONS[item["station_name"]]
+        else:
+            item["colors"] = [item["line_color"]]
+        result.append(item)
+    return result
 
-@app.get("/api/youbike/stations")
-def get_youbike_stations():
+@app.get("/api/mrt/exits")
+def get_mrt_exits(station_name: str):
     with engine.connect() as conn:
         rows = conn.execute(text("""
-            SELECT s.station_id, s.station_name, s.area, s.lat, s.lng,
-                   s.total_spaces, snap.available_bikes, snap.available_spaces,
-                   snap.recorded_at
-            FROM youbike_stations s
-            LEFT JOIN LATERAL (
-                SELECT available_bikes, available_spaces, recorded_at
-                FROM youbike_snapshots
-                WHERE station_id = s.station_id
-                ORDER BY recorded_at DESC
-                LIMIT 1
-            ) snap ON true
-            ORDER BY s.station_name
-        """)).fetchall()
+            SELECT station_name, exit_name, exit_number, lat, lng
+            FROM mrt_exits
+            WHERE station_name LIKE :name
+            ORDER BY exit_number
+        """), {"name": f"%{station_name}%"}).fetchall()
     return [dict(r._mapping) for r in rows]
 
 @app.get("/api/nearby")
@@ -70,7 +73,6 @@ def get_nearby(lat: float, lng: float, radius: int = 1000):
         return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
     with engine.connect() as conn:
-        # 附近 YouBike 站
         youbike_rows = conn.execute(text("""
             SELECT s.station_id, s.station_name, s.area, s.lat, s.lng,
                    s.total_spaces, snap.available_bikes, snap.available_spaces
@@ -86,12 +88,12 @@ def get_nearby(lat: float, lng: float, radius: int = 1000):
               AND s.lng BETWEEN :lng - 0.015 AND :lng + 0.015
         """), {"lat": lat, "lng": lng}).fetchall()
 
-        # 附近公車站（從 bus_stops 表）
         bus_rows = conn.execute(text("""
             SELECT DISTINCT stop_name, lat, lng
             FROM bus_stops
             WHERE lat BETWEEN :lat - 0.015 AND :lat + 0.015
               AND lng BETWEEN :lng - 0.015 AND :lng + 0.015
+              AND lat != 0 AND lng != 0
         """), {"lat": lat, "lng": lng}).fetchall()
 
     nearby_youbike = []
@@ -114,7 +116,7 @@ def get_nearby(lat: float, lng: float, radius: int = 1000):
 
     return {
         "youbike": nearby_youbike[:20],
-        "bus_stops": nearby_bus[:20],
+        "bus_stops": nearby_bus[:30],
     }
 
 @app.get("/api/bus/arrivals")
@@ -139,7 +141,19 @@ def get_bus_arrivals(stop_name: str = None, route_id: str = None, go_back: str =
             WHERE {where}
             ORDER BY route_id, stop_name, go_back, recorded_at DESC
         """), params).fetchall()
-    return [dict(r._mapping) for r in rows]
+
+        # 加上終點站資訊
+        destinations = conn.execute(text("""
+            SELECT route_name, go_back, destination FROM route_destinations
+        """)).fetchall()
+        dest_map = {(r.route_name, r.go_back): r.destination for r in destinations}
+
+    result = []
+    for r in rows:
+        item = dict(r._mapping)
+        item["destination"] = dest_map.get((item["route_id"], item["go_back"]), "")
+        result.append(item)
+    return result
 
 @app.get("/api/bus/shape/{route_name}")
 def get_bus_shape(route_name: str, go_back: str = "0"):
