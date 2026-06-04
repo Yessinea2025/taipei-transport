@@ -47,11 +47,24 @@ function makeSquareIcon(colors, isSelected) {
   })
 }
 
-function makeExitIcon(isSelected) {
+function makeExitIcon(exitNumber, isSelected) {
+  const label = exitNumber || '?'
+  const bg = isSelected ? '#facc15' : '#1a1d27'
+  const border = isSelected ? '#facc15' : '#aaa'
+  const color = isSelected ? '#000' : '#fff'
   return new L.DivIcon({
-    html: `<div style="width:20px;height:20px;background:${isSelected ? '#facc15' : '#fff'};border-radius:50%;border:2px solid ${isSelected ? '#facc15' : '#888'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#000;">出</div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
+    html: `<div style="
+      min-width:22px;height:22px;padding:0 4px;
+      background:${bg};
+      border-radius:11px;
+      border:2px solid ${border};
+      display:flex;align-items:center;justify-content:center;
+      font-size:11px;font-weight:700;color:${color};
+      white-space:nowrap;
+      box-shadow:0 1px 4px rgba(0,0,0,0.5);
+    ">${label}</div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
     className: '',
   })
 }
@@ -90,7 +103,7 @@ export default function TransportMap({ apiBase, selectedMrt, selectedExit, exits
         <Marker
           key={`exit-${i}`}
           position={[e.lat, e.lng]}
-          icon={makeExitIcon(selectedExit?.exit_name === e.exit_name)}
+          icon={makeExitIcon(e.exit_number, selectedExit?.exit_name === e.exit_name)}
           eventHandlers={{ click: () => onSelectExit(e) }}
         >
           <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>

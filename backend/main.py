@@ -43,9 +43,9 @@ def get_mrt_stations():
     result = []
     for r in rows:
         item = dict(r._mapping)
-        # 交叉站加上所有路線顏色
-        if item["station_name"] in TRANSFER_STATIONS:
-            item["colors"] = TRANSFER_STATIONS[item["station_name"]]
+        name = item["station_name"].strip()
+        if name in TRANSFER_STATIONS:
+            item["colors"] = TRANSFER_STATIONS[name]
         else:
             item["colors"] = [item["line_color"]]
         result.append(item)
@@ -57,9 +57,17 @@ def get_mrt_exits(station_name: str):
         rows = conn.execute(text("""
             SELECT station_name, exit_name, exit_number, lat, lng
             FROM mrt_exits
-            WHERE station_name LIKE :name
-            ORDER BY exit_number
-        """), {"name": f"%{station_name}%"}).fetchall()
+            WHERE station_name = :name
+            ORDER BY exit_number::integer
+        """), {"name": station_name}).fetchall()
+        if not rows:
+            # 模糊搜尋
+            rows = conn.execute(text("""
+                SELECT station_name, exit_name, exit_number, lat, lng
+                FROM mrt_exits
+                WHERE station_name LIKE :name
+                ORDER BY exit_number
+            """), {"name": f"%{station_name}%"}).fetchall()
     return [dict(r._mapping) for r in rows]
 
 @app.get("/api/nearby")

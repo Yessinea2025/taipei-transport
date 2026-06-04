@@ -136,16 +136,19 @@ MRT_STATIONS = [
 
 # 交叉站（同一站名出現在多條路線）
 TRANSFER_STATIONS = {
-    "台北車站": ["#e3002c", "#0070bd"],
-    "忠孝新生": ["#008659", "#0070bd", "#f8a217"],
-    "忠孝復興": ["#008659", "#0070bd", "#a05a2c"],
-    "南京復興": ["#008659", "#a05a2c"],
-    "古亭":     ["#008659", "#f8a217"],
-    "民權西路": ["#e3002c", "#f8a217"],
-    "大安":     ["#e3002c", "#a05a2c"],
-    "東門":     ["#e3002c", "#008659"],
+    "台北車站":   ["#e3002c", "#0070bd"],
+    "忠孝新生":   ["#0070bd", "#f8a217"],
+    "忠孝復興":   ["#0070bd", "#a05a2c"],
+    "南京復興":   ["#008659", "#a05a2c"],
+    "古亭":       ["#008659", "#f8a217"],
+    "民權西路":   ["#e3002c", "#f8a217"],
+    "大安":       ["#e3002c", "#a05a2c"],
+    "東門":       ["#e3002c", "#f8a217"],
     "中正紀念堂": ["#e3002c", "#008659"],
     "南港展覽館": ["#0070bd", "#a05a2c"],
+    "中山":       ["#e3002c", "#008659"],
+    "松江南京":   ["#008659", "#f8a217"],
+    "西門":       ["#0070bd", "#008659"],
 }
 
 def fetch_gz(url):
@@ -262,13 +265,17 @@ def load_mrt_exits():
         with engine.connect() as conn:
             for r in results:
                 try:
+                    exit_name = r.get("出入口名稱", "")
+                    exit_number = r.get("出入口編號", "")
+                    # 從「頂埔站出口1」解析站名「頂埔」
+                    station_name = exit_name.split("站")[0] if "站" in exit_name else ""
                     conn.execute(text("""
                         INSERT INTO mrt_exits (station_name, exit_name, exit_number, lat, lng)
                         VALUES (:station_name, :exit_name, :exit_number, :lat, :lng)
                     """), {
-                        "station_name": r.get("出口所在站名", ""),
-                        "exit_name": r.get("出口名稱", ""),
-                        "exit_number": r.get("出口編號", ""),
+                        "station_name": station_name,
+                        "exit_name": exit_name,
+                        "exit_number": exit_number,
                         "lat": float(r.get("緯度", 0)),
                         "lng": float(r.get("經度", 0)),
                     })
