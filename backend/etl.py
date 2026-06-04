@@ -13,8 +13,33 @@ BUS_ROUTE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetRoute.gz"
 BUS_SHAPE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetBusShape.gz"
 MRT_EXIT_API = "https://data.taipei/api/v1/dataset/307a7f61-e302-4108-a817-877ccbfca7c1?scope=resourceAquire&limit=500"
 
-TARGET_ROUTE_NAMES = ["0東", "1", "2", "3", "5", "15", "20", "22", "30", "37",
-                      "52", "74", "111", "204", "208", "214", "253", "295"]
+TRANSFER_STATIONS = {
+    "台北車站":   ["#e3002c", "#0070bd"],
+    "忠孝新生":   ["#0070bd", "#f8a217"],
+    "忠孝復興":   ["#0070bd", "#a05a2c"],
+    "南京復興":   ["#008659", "#a05a2c"],
+    "古亭":       ["#008659", "#f8a217"],
+    "民權西路":   ["#e3002c", "#f8a217"],
+    "大安":       ["#e3002c", "#a05a2c"],
+    "東門":       ["#e3002c", "#f8a217"],
+    "中正紀念堂": ["#e3002c", "#008659"],
+    "南港展覽館": ["#0070bd", "#a05a2c"],
+    "中山":       ["#e3002c", "#008659"],
+    "松江南京":   ["#008659", "#f8a217"],
+    "西門":       ["#0070bd", "#008659"],
+}
+
+# 台北車站 M 出口（手動內建）
+TAIPEI_MAIN_EXITS = [
+    {"station_name": "台北車站", "exit_name": "台北車站出口M1", "exit_number": "M1", "lat": 25.04787, "lng": 121.51690},
+    {"station_name": "台北車站", "exit_name": "台北車站出口M2", "exit_number": "M2", "lat": 25.04823, "lng": 121.51745},
+    {"station_name": "台北車站", "exit_name": "台北車站出口M3", "exit_number": "M3", "lat": 25.04855, "lng": 121.51745},
+    {"station_name": "台北車站", "exit_name": "台北車站出口M4", "exit_number": "M4", "lat": 25.04870, "lng": 121.51690},
+    {"station_name": "台北車站", "exit_name": "台北車站出口M5", "exit_number": "M5", "lat": 25.04855, "lng": 121.51635},
+    {"station_name": "台北車站", "exit_name": "台北車站出口M6", "exit_number": "M6", "lat": 25.04823, "lng": 121.51635},
+    {"station_name": "台北車站", "exit_name": "台北車站出口M7", "exit_number": "M7", "lat": 25.04787, "lng": 121.51635},
+    {"station_name": "台北車站", "exit_name": "台北車站出口M8", "exit_number": "M8", "lat": 25.04760, "lng": 121.51690},
+]
 
 MRT_STATIONS = [
     # 淡水信義線 (紅)
@@ -134,23 +159,6 @@ MRT_STATIONS = [
     {"station_name":"南港展覽館","station_code":"BR24","line":"文湖線","line_color":"#a05a2c","lat":25.0553,"lng":121.6178},
 ]
 
-# 交叉站（同一站名出現在多條路線）
-TRANSFER_STATIONS = {
-    "台北車站":   ["#e3002c", "#0070bd"],
-    "忠孝新生":   ["#0070bd", "#f8a217"],
-    "忠孝復興":   ["#0070bd", "#a05a2c"],
-    "南京復興":   ["#008659", "#a05a2c"],
-    "古亭":       ["#008659", "#f8a217"],
-    "民權西路":   ["#e3002c", "#f8a217"],
-    "大安":       ["#e3002c", "#a05a2c"],
-    "東門":       ["#e3002c", "#f8a217"],
-    "中正紀念堂": ["#e3002c", "#008659"],
-    "南港展覽館": ["#0070bd", "#a05a2c"],
-    "中山":       ["#e3002c", "#008659"],
-    "松江南京":   ["#008659", "#f8a217"],
-    "西門":       ["#0070bd", "#008659"],
-}
-
 def fetch_gz(url):
     resp = requests.get(url, timeout=30)
     resp.raise_for_status()
@@ -171,7 +179,7 @@ def extract_bus():
     for r in routes:
         name = r.get("nameZh", "").strip()
         rid = r.get("Id")
-        if name in TARGET_ROUTE_NAMES and rid:
+        if rid and name:
             route_id_map[int(rid)] = name
             route_destinations[name] = {
                 "0": r.get("destinationZh", ""),
@@ -250,7 +258,6 @@ def load_mrt_stations():
                 ON CONFLICT DO NOTHING
             """), s)
         conn.commit()
-    print(f"  捷運站載入完成：{len(MRT_STATIONS)} 站")
 
 def load_mrt_exits():
     with engine.connect() as conn:
@@ -258,6 +265,16 @@ def load_mrt_exits():
         if existing > 0:
             return
     try:
+        # 先載入台北車站手動出口
+        with engine.connect() as conn:
+            for e in TAIPEI_MAIN_EXITS:
+                conn.execute(text("""
+                    INSERT INTO mrt_exits (station_name, exit_name, exit_number, lat, lng)
+                    VALUES (:station_name, :exit_name, :exit_number, :lat, :lng)
+                """), e)
+            conn.commit()
+
+        # 再從 API 抓其他站出口
         resp = requests.get(MRT_EXIT_API, timeout=15)
         resp.raise_for_status()
         data = resp.json()
@@ -267,8 +284,9 @@ def load_mrt_exits():
                 try:
                     exit_name = r.get("出入口名稱", "")
                     exit_number = r.get("出入口編號", "")
-                    # 從「頂埔站出口1」解析站名「頂埔」
                     station_name = exit_name.split("站")[0] if "站" in exit_name else ""
+                    if not station_name:
+                        continue
                     conn.execute(text("""
                         INSERT INTO mrt_exits (station_name, exit_name, exit_number, lat, lng)
                         VALUES (:station_name, :exit_name, :exit_number, :lat, :lng)
@@ -282,7 +300,7 @@ def load_mrt_exits():
                 except Exception:
                     continue
             conn.commit()
-        print(f"  捷運出口載入完成：{len(results)} 筆")
+        print(f"  捷運出口載入完成：{len(results) + len(TAIPEI_MAIN_EXITS)} 筆")
     except Exception as e:
         print(f"  捷運出口載入失敗: {e}")
 

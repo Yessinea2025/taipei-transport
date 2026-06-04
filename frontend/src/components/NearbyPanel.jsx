@@ -17,7 +17,7 @@ function waitColor(seconds) {
   return '#ef4444'
 }
 
-export default function NearbyPanel({ nearbyData, selectedMrt, selectedExit, activeShape, onSelectShape, onBack, apiBase }) {
+export default function NearbyPanel({ nearbyData, selectedMrt, selectedExit, activeShape, onSelectShape, onBack, apiBase, refreshTick }) {
   const [goBack, setGoBack] = useState('0')
   const [stopArrivals, setStopArrivals] = useState({})
   const [activeStop, setActiveStop] = useState(null)
@@ -36,6 +36,16 @@ export default function NearbyPanel({ nearbyData, selectedMrt, selectedExit, act
     setStopArrivals({})
   }, [selectedExit])
 
+  // 當 refreshTick 變動（手動刷新），重新抓目前開著的站
+  useEffect(() => {
+    if (!activeStop || refreshTick === 0) return
+    axios.get(`${apiBase}/api/bus/arrivals`, {
+      params: { stop_name: activeStop, go_back: goBack }
+    }).then(r => {
+      setStopArrivals(prev => ({ ...prev, [activeStop]: r.data }))
+    }).catch(() => {})
+  }, [refreshTick])
+
   useEffect(() => {
     if (!activeStop) return
     const fetch = () => {
@@ -52,7 +62,6 @@ export default function NearbyPanel({ nearbyData, selectedMrt, selectedExit, act
 
   return (
     <div style={{ background: '#1a1d27', borderRadius: '12px', border: '1px solid #2a2d3a', padding: '14px', display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: 'calc(100vh - 200px)' }}>
-      {/* 標題與返回 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', flexShrink: 0 }}>
         <button onClick={onBack} style={{ background: '#2a2d3a', border: 'none', borderRadius: '6px', color: '#aaa', fontSize: '12px', padding: '4px 8px', cursor: 'pointer' }}>← 返回</button>
         <div style={{ fontSize: '14px', fontWeight: 700, color: '#fff' }}>
@@ -60,7 +69,6 @@ export default function NearbyPanel({ nearbyData, selectedMrt, selectedExit, act
         </div>
       </div>
 
-      {/* 去程/返程切換 */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexShrink: 0 }}>
         {['0', '1'].map(dir => (
           <button key={dir} onClick={() => { setGoBack(dir); setStopArrivals({}) }} style={{
@@ -77,7 +85,6 @@ export default function NearbyPanel({ nearbyData, selectedMrt, selectedExit, act
         附近公車站（{busStops.length}）
       </div>
 
-      {/* 可滾動列表 */}
       <div style={{ overflowY: 'auto', flex: 1 }}>
         {busStops.length === 0 ? (
           <div style={{ color: '#555', fontSize: '12px' }}>載入中...</div>
@@ -98,7 +105,6 @@ export default function NearbyPanel({ nearbyData, selectedMrt, selectedExit, act
                   <div style={{ fontSize: '12px', color: '#ddd', fontWeight: 500 }}>{stop.stop_name}</div>
                   <div style={{ fontSize: '11px', color: '#555' }}>{stop.distance} 公尺</div>
                 </div>
-
                 {isActive && (
                   <div style={{ marginTop: '8px', borderTop: '1px solid #2a2d3a', paddingTop: '8px' }}>
                     {arrivals.length === 0 ? (

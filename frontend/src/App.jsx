@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
 import TransportMap from './components/Map.jsx'
 import NearbyPanel from './components/NearbyPanel.jsx'
@@ -16,14 +16,25 @@ export default function App() {
   const [selectedYoubike, setSelectedYoubike] = useState(null)
   const [activeShape, setActiveShape] = useState(null)
   const [lastRefresh, setLastRefresh] = useState(new Date())
+  const [refreshTick, setRefreshTick] = useState(0)
+
+  const fetchStatus = useCallback(() => {
+    axios.get(`${API}/api/status`).then(r => {
+      setStatus(r.data)
+      setLastRefresh(new Date())
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
-    const fetchStatus = () =>
-      axios.get(`${API}/api/status`).then(r => setStatus(r.data)).catch(() => {})
     fetchStatus()
     const id = setInterval(fetchStatus, 1 * 60 * 1000)
     return () => clearInterval(id)
   }, [])
+
+  const handleRefresh = () => {
+    fetchStatus()
+    setRefreshTick(t => t + 1)
+  }
 
   const handleSelectMrt = async (station) => {
     if (selectedMrt?.station_name === station.station_name) {
@@ -95,10 +106,9 @@ export default function App() {
         <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>點選捷運站 → 選擇出口 → 查看 1 公里內 YouBike × 公車即時資訊</div>
       </div>
       <div style={{ padding: '10px 20px 0' }}>
-        <StatusBar status={status} lastRefresh={lastRefresh} />
+        <StatusBar status={status} lastRefresh={lastRefresh} onRefresh={handleRefresh} />
       </div>
       <div style={{ display: 'flex', gap: '14px', padding: '10px 20px', height: 'calc(100vh - 110px)' }}>
-        {/* Map */}
         <div style={{ flex: '1 1 0', background: '#1a1d27', borderRadius: '12px', border: '1px solid #2a2d3a', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '10px 14px', fontSize: '12px', color: '#888', borderBottom: '1px solid #2a2d3a', display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
             {lineColors.map(l => (
@@ -128,7 +138,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right panel */}
         <div style={{ width: '360px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
           {!selectedMrt ? (
             <div style={{ background: '#1a1d27', borderRadius: '12px', border: '1px solid #2a2d3a', padding: '40px 20px', textAlign: 'center', color: '#555', fontSize: '13px' }}>
@@ -139,15 +148,15 @@ export default function App() {
               <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', marginBottom: '12px' }}>
                 🚉 {selectedMrt.station_name}站
               </div>
-              <div style={{ fontSize: '12px', color: '#888', marginBottom: '10px' }}>選擇出口：</div>
+              <div style={{ fontSize: '12px', color: '#888', marginBottom: '10px' }}>請選擇出口：</div>
               {exits.length === 0 ? (
-                <div style={{ fontSize: '12px', color: '#555' }}>無出口資料，直接以站點為中心查詢</div>
+                <div style={{ fontSize: '12px', color: '#555' }}>無出口資料</div>
               ) : (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                   {exits.map((e, i) => (
                     <button key={i} onClick={() => handleSelectExit(e)} style={{
-                      padding: '6px 12px', borderRadius: '8px', border: '1px solid #2a2d3a',
-                      background: '#12141e', color: '#ddd', fontSize: '12px', cursor: 'pointer',
+                      padding: '6px 14px', borderRadius: '8px', border: '1px solid #2a2d3a',
+                      background: '#12141e', color: '#ddd', fontSize: '13px', cursor: 'pointer', fontWeight: 600,
                     }}>
                       {e.exit_number || e.exit_name}
                     </button>
@@ -165,6 +174,7 @@ export default function App() {
                 onSelectShape={handleSelectShape}
                 onBack={() => { setSelectedExit(null); setNearbyData(null) }}
                 apiBase={API}
+                refreshTick={refreshTick}
               />
               {selectedYoubike && (
                 <div style={{ background: '#1a1d27', borderRadius: '12px', border: '1px solid #2a2d3a', padding: '14px', flexShrink: 0 }}>
