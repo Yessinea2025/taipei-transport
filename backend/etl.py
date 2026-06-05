@@ -9,7 +9,7 @@ from database import engine
 from datetime import datetime
 
 YOUBIKE_TP_API = "https://tcgbusfs.blob.core.windows.net/dotapp/youbike/v2/youbike_immediate.json"
-YOUBIKE_NTP_API = "https://data.ntpc.gov.tw/api/datasets/010e5b15-3823-4b20-b401-b1cf000550c5/json"
+YOUBIKE_NTP_API = "https://data.ntpc.gov.tw/api/datasets/010e5b15-3823-4b20-b401-b1cf000550c5/json?size=1000"
 BUS_ESTIMATE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetEstimateTime.gz"
 BUS_STOP_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetStop.gz"
 BUS_ROUTE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetRoute.gz"
@@ -249,21 +249,26 @@ def transform_youbike_ntpc(raw):
     stations, snapshots = [], []
     for item in raw:
         try:
-            sid = item.get("sno", "")
+            # 新北欄位可能是 sno/sna 或 StationNo/StationName
+            sid = item.get("sno") or item.get("StationNo", "")
             if not sid:
+                continue
+            lat = float(item.get("latitude") or item.get("Latitude") or 0)
+            lng = float(item.get("longitude") or item.get("Longitude") or 0)
+            if lat == 0 or lng == 0:
                 continue
             stations.append({
                 "station_id": f"NTP_{sid}",
-                "station_name": item.get("sna", ""),
-                "area": item.get("sarea", ""),
-                "lat": float(item.get("latitude", 0)),
-                "lng": float(item.get("longitude", 0)),
-                "total_spaces": int(item.get("tot", 0)),
+                "station_name": item.get("sna") or item.get("StationName", ""),
+                "area": item.get("sarea") or item.get("AreaName", ""),
+                "lat": lat,
+                "lng": lng,
+                "total_spaces": int(item.get("tot") or item.get("BikesCapacity") or 0),
             })
             snapshots.append({
                 "station_id": f"NTP_{sid}",
-                "available_bikes": int(item.get("sbi", 0)),
-                "available_spaces": int(item.get("bemp", 0)),
+                "available_bikes": int(item.get("sbi") or item.get("AvailableRentBikes") or 0),
+                "available_spaces": int(item.get("bemp") or item.get("AvailableReturnBikes") or 0),
             })
         except Exception:
             continue
