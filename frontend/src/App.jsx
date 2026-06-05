@@ -96,7 +96,6 @@ export default function App() {
     setActiveShape(null)
     fetchNearby(exit)
   }
-
   const handleSelectShape = async (routeName, goBack) => {
     if (activeShape?.routeName === routeName && activeShape?.goBack === goBack) {
       setActiveShape(null)
@@ -151,7 +150,7 @@ export default function App() {
               onSelectExit={handleSelectExit}
               nearbyData={nearbyData}
               activeShape={activeShape}
-              onSelectYoubike={setSelectedYoubike}
+              onSelectYoubike={(s) => setSelectedYoubike(prev => prev?.station_id === s.station_id ? null : s)}
             />
           </div>
         </div>
@@ -190,7 +189,7 @@ export default function App() {
                 selectedExit={selectedExit}
                 activeShape={activeShape}
                 onSelectShape={handleSelectShape}
-                onBack={() => { setSelectedExit(null); setNearbyData(null) }}
+                onBack={() => { setSelectedExit(null); setNearbyData(null); setActiveShape(null); setSelectedYoubike(null) }}
                 apiBase={API}
                 refreshTick={refreshTick}
               />

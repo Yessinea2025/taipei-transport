@@ -225,8 +225,8 @@ def get_bus_arrivals(stop_name: str = None, go_back: str = None):
     except Exception:
         return []
 
-    result = []
-    seen = set()
+    # 用 dict 收集每條路線最快到站的班次
+    best: dict = {}
     for item in estimates:
         stop_id = int(item.get("StopID", 0))
         if stop_id not in target_stop_ids:
@@ -238,16 +238,22 @@ def get_bus_arrivals(stop_name: str = None, go_back: str = None):
         route_id_num = int(item.get("RouteID", 0))
         route_name = _route_id_map.get(route_id_num, str(route_id_num))
 
-        key = (route_name, item_go_back)
-        if key in seen:
-            continue
-        seen.add(key)
-
         try:
             est = int(item.get("EstimateTime", -1))
         except (ValueError, TypeError):
             est = -1
 
+        key = (route_name, item_go_back)
+        # 保留最快到站的（est >= 0 優先，相同條件取較小值）
+        if key not in best:
+            best[key] = est
+        else:
+            prev = best[key]
+            if est >= 0 and (prev < 0 or est < prev):
+                best[key] = est
+
+    result = []
+    for (route_name, item_go_back), est in best.items():
         result.append({
             "route_id": route_name,
             "stop_name": stop_name,
