@@ -1,13 +1,16 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text
 from database import engine, init_db
 from etl import run_etl, load_mrt_stations, load_mrt_exits, TRANSFER_STATIONS
 import math
+import gzip
+import json
+import requests as req
 import atexit
 
-app = FastAPI(title="台北交通儀表板 API")
+app = FastAPI(title="台北市捷運出口即時交通儀表板 API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,20 +21,59 @@ app.add_middleware(
 
 scheduler = BackgroundScheduler()
 
+# 記憶體快取：RouteID(int) -> 路線名稱
+_route_id_map: dict = {}
+_stop_id_map: dict = {}
+
+BUS_ROUTE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetRoute.gz"
+BUS_STOP_API  = "https://tcgbusfs.blob.core.windows.net/blobbus/GetStop.gz"
+BUS_ESTIMATE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetEstimateTime.gz"
+
+def fetch_gz(url, timeout=15):
+    resp = req.get(url, timeout=timeout)
+    resp.raise_for_status()
+    data = json.loads(gzip.decompress(resp.content).decode("utf-8"))
+    if isinstance(data, dict) and "BusInfo" in data:
+        return data["BusInfo"]
+    return data
+
+def build_route_map():
+    global _route_id_map
+    try:
+        routes = fetch_gz(BUS_ROUTE_API)
+        _route_id_map = {int(r["Id"]): r.get("nameZh", "").strip() for r in routes if r.get("Id") and r.get("nameZh")}
+        print(f"  路線對照表建立完成：{len(_route_id_map)} 條")
+    except Exception as e:
+        print(f"  路線對照表建立失敗: {e}")
+
+def build_stop_map():
+    global _stop_id_map
+    try:
+        stops = fetch_gz(BUS_STOP_API)
+        _stop_id_map = {int(s["Id"]): s.get("nameZh", "") for s in stops if s.get("Id")}
+        print(f"  站牌對照表建立完成：{len(_stop_id_map)} 個")
+    except Exception as e:
+        print(f"  站牌對照表建立失敗: {e}")
+
 @app.on_event("startup")
 def startup():
     init_db()
     load_mrt_stations()
     load_mrt_exits()
+    build_route_map()
+    build_stop_map()
     run_etl()
     scheduler.add_job(run_etl, "interval", minutes=1, id="etl_job")
+    # 每小時重建路線/站牌對照表
+    scheduler.add_job(build_route_map, "interval", hours=1, id="route_map_job")
+    scheduler.add_job(build_stop_map, "interval", hours=6, id="stop_map_job")
     scheduler.start()
 
 atexit.register(lambda: scheduler.shutdown())
 
 @app.get("/")
 def root():
-    return {"status": "ok", "message": "台北交通儀表板 API"}
+    return {"status": "ok", "message": "台北市捷運出口即時交通儀表板 API"}
 
 @app.get("/api/mrt/stations")
 def get_mrt_stations():
@@ -44,10 +86,7 @@ def get_mrt_stations():
     for r in rows:
         item = dict(r._mapping)
         name = item["station_name"].strip()
-        if name in TRANSFER_STATIONS:
-            item["colors"] = TRANSFER_STATIONS[name]
-        else:
-            item["colors"] = [item["line_color"]]
+        item["colors"] = TRANSFER_STATIONS.get(name, [item["line_color"]])
         result.append(item)
     return result
 
@@ -56,16 +95,12 @@ def get_mrt_exits(station_name: str):
     with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT station_name, exit_name, exit_number, lat, lng
-            FROM mrt_exits
-            WHERE station_name = :name
-            ORDER BY exit_name
+            FROM mrt_exits WHERE station_name = :name ORDER BY exit_name
         """), {"name": station_name}).fetchall()
         if not rows:
             rows = conn.execute(text("""
                 SELECT station_name, exit_name, exit_number, lat, lng
-                FROM mrt_exits
-                WHERE station_name LIKE :name
-                ORDER BY exit_name
+                FROM mrt_exits WHERE station_name LIKE :name ORDER BY exit_name
             """), {"name": f"%{station_name}%"}).fetchall()
     return [dict(r._mapping) for r in rows]
 
@@ -88,8 +123,7 @@ def get_nearby(lat: float, lng: float, radius: int = 1000):
                 SELECT available_bikes, available_spaces
                 FROM youbike_snapshots
                 WHERE station_id = s.station_id
-                ORDER BY recorded_at DESC
-                LIMIT 1
+                ORDER BY recorded_at DESC LIMIT 1
             ) snap ON true
             WHERE s.lat BETWEEN :lat - 0.015 AND :lat + 0.015
               AND s.lng BETWEEN :lng - 0.015 AND :lng + 0.015
@@ -127,39 +161,59 @@ def get_nearby(lat: float, lng: float, radius: int = 1000):
     }
 
 @app.get("/api/bus/arrivals")
-def get_bus_arrivals(stop_name: str = None, route_id: str = None, go_back: str = None):
-    with engine.connect() as conn:
-        conditions = ["recorded_at > NOW() - INTERVAL '10 minutes'"]
-        params = {}
-        if stop_name:
-            conditions.append("stop_name = :stop_name")
-            params["stop_name"] = stop_name
-        if route_id:
-            conditions.append("route_id = :route_id")
-            params["route_id"] = route_id
-        if go_back is not None:
-            conditions.append("go_back = :go_back")
-            params["go_back"] = go_back
-        where = " AND ".join(conditions)
-        rows = conn.execute(text(f"""
-            SELECT DISTINCT ON (route_id, stop_name, go_back)
-                route_id, stop_name, estimate_time, go_back, recorded_at
-            FROM bus_arrivals
-            WHERE {where}
-            ORDER BY route_id, stop_name, go_back, recorded_at DESC
-        """), params).fetchall()
+def get_bus_arrivals(stop_name: str = None, go_back: str = None):
+    if not stop_name:
+        return []
 
-        # 加上終點站資訊
-        destinations = conn.execute(text("""
+    # 找目標 stop_id
+    target_stop_ids = {sid for sid, name in _stop_id_map.items() if name == stop_name}
+    if not target_stop_ids:
+        return []
+
+    # 從資料庫取終點站對照
+    with engine.connect() as conn:
+        dest_rows = conn.execute(text("""
             SELECT route_name, go_back, destination FROM route_destinations
         """)).fetchall()
-        dest_map = {(r.route_name, r.go_back): r.destination for r in destinations}
+    dest_map = {(r.route_name, r.go_back): r.destination for r in dest_rows}
+
+    try:
+        estimates = fetch_gz(BUS_ESTIMATE_API, timeout=10)
+    except Exception:
+        return []
 
     result = []
-    for r in rows:
-        item = dict(r._mapping)
-        item["destination"] = dest_map.get((item["route_id"], item["go_back"]), "")
-        result.append(item)
+    seen = set()
+    for item in estimates:
+        stop_id = int(item.get("StopID", 0))
+        if stop_id not in target_stop_ids:
+            continue
+        item_go_back = str(item.get("GoBack", "0"))
+        if go_back is not None and item_go_back != go_back:
+            continue
+
+        route_id_num = int(item.get("RouteID", 0))
+        route_name = _route_id_map.get(route_id_num, str(route_id_num))
+
+        key = (route_name, item_go_back)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        try:
+            est = int(item.get("EstimateTime", -1))
+        except (ValueError, TypeError):
+            est = -1
+
+        result.append({
+            "route_id": route_name,
+            "stop_name": stop_name,
+            "estimate_time": est,
+            "go_back": item_go_back,
+            "destination": dest_map.get((route_name, item_go_back), ""),
+        })
+
+    result.sort(key=lambda x: x["route_id"])
     return result
 
 @app.get("/api/bus/shape/{route_name}")
@@ -167,8 +221,7 @@ def get_bus_shape(route_name: str, go_back: str = "0"):
     with engine.connect() as conn:
         row = conn.execute(text("""
             SELECT coordinates FROM bus_shapes
-            WHERE route_name = :route_name AND go_back = :go_back
-            LIMIT 1
+            WHERE route_name = :route_name AND go_back = :go_back LIMIT 1
         """), {"route_name": route_name, "go_back": go_back}).fetchone()
     if not row:
         return {"coordinates": []}
@@ -197,14 +250,12 @@ def get_status():
         youbike_count = conn.execute(text(
             "SELECT COUNT(*) FROM youbike_snapshots WHERE recorded_at > NOW() - INTERVAL '10 minutes'"
         )).scalar()
-        bus_count = conn.execute(text(
-            "SELECT COUNT(*) FROM bus_arrivals WHERE recorded_at > NOW() - INTERVAL '10 minutes'"
-        )).scalar()
         last_update = conn.execute(text(
             "SELECT MAX(recorded_at) FROM youbike_snapshots"
         )).scalar()
     return {
         "youbike_recent_records": youbike_count,
-        "bus_recent_records": bus_count,
         "last_update": last_update,
+        "route_map_size": len(_route_id_map),
+        "stop_map_size": len(_stop_id_map),
     }
