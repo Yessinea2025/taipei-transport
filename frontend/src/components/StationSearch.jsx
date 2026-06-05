@@ -104,15 +104,15 @@ export default function StationSearch({ stations, onSelect }) {
   }
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', width: '220px', zIndex: 1000 }}>
+    <div ref={containerRef} style={{ position: 'relative', width: '220px', zIndex: 9998 }}>
       <div style={{
         display: 'flex', alignItems: 'center',
-        background: 'var(--color-background-primary)',
-        border: '0.5px solid var(--color-border-secondary)',
-        borderRadius: 'var(--border-radius-md)',
+        background: '#f5f0e8',
+        border: '1px solid #d4c9b0',
+        borderRadius: '8px',
         padding: '5px 10px', gap: '6px',
       }}>
-        <i className="ti ti-search" style={{ fontSize: '14px', color: 'var(--color-text-tertiary)' }} aria-hidden="true"></i>
+        <span style={{ color: '#888', fontSize: '13px' }}>🔍</span>
         <input
           ref={inputRef}
           value={query}
@@ -122,12 +122,12 @@ export default function StationSearch({ stations, onSelect }) {
           placeholder="搜尋捷運站..."
           style={{
             background: 'transparent', border: 'none', outline: 'none',
-            color: 'var(--color-text-primary)', fontSize: '12px', width: '100%',
+            color: '#222', fontSize: '12px', width: '100%',
           }}
         />
         {query && (
           <button onClick={() => { setQuery(''); setSuggestions([]); setShowSuggestions(false) }}
-            style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontSize: '12px', padding: 0 }}>
+            style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '12px', padding: 0 }}>
             ✕
           </button>
         )}
@@ -135,12 +135,12 @@ export default function StationSearch({ stations, onSelect }) {
 
       {showSuggestions && (
         <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9999,
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 99999,
           background: '#1a1d27',
           border: '1px solid #2a2d3a',
           borderRadius: '8px',
           marginTop: '4px', overflow: 'hidden',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.8)',
         }}>
           {suggestions.map((s, i) => (
             <div
