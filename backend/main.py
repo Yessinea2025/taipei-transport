@@ -272,6 +272,7 @@ def get_bus_route_stops(route_name: str, go_back: str = "0"):
     return result
 
 
+@app.get("/api/bus/shape/{route_name}")
 def get_bus_shape(route_name: str, go_back: str = "0"):
     with engine.connect() as conn:
         row = conn.execute(text("""
