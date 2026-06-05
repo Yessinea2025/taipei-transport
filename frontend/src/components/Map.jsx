@@ -79,6 +79,8 @@ export default function TransportMap({ apiBase, selectedMrt, selectedExit, exits
       setRouteStops([])
       return
     }
+    // 立刻清空舊站點，避免延遲殘留
+    setRouteStops([])
     axios.get(`${apiBase}/api/bus/stops/${encodeURIComponent(activeShape.routeName)}`, {
       params: { go_back: activeShape.goBack }
     }).then(r => setRouteStops(r.data)).catch(() => setRouteStops([]))
@@ -170,10 +172,9 @@ export default function TransportMap({ apiBase, selectedMrt, selectedExit, exits
           radius={5}
           pathOptions={{ color: '#facc15', fillColor: '#1a1d27', fillOpacity: 1, weight: 2 }}
         >
-          <Tooltip direction="top" offset={[0, -6]} opacity={0.95} permanent={false}>
+          <Tooltip direction="top" offset={[0, -6]} opacity={0.95}>
             <div style={{ fontSize: '12px' }}>
               <strong>{s.stop_name}</strong>
-              <span style={{ color: '#aaa', marginLeft: '6px' }}>第 {s.seq} 站</span>
             </div>
           </Tooltip>
         </CircleMarker>
