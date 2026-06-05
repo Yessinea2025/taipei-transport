@@ -130,7 +130,6 @@ export default function App() {
           <StatusBar lastRefresh={lastRefresh} onRefresh={handleRefresh} />
         </div>
       </div>
-      </div>
       <div style={{ display: 'flex', gap: '14px', padding: '10px 20px', height: 'calc(100vh - 110px)' }}>
         <div style={{ flex: '1 1 0', background: '#1a1d27', borderRadius: '12px', border: '1px solid #2a2d3a', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '10px 14px', fontSize: '12px', color: '#888', borderBottom: '1px solid #2a2d3a', display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
