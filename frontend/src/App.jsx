@@ -4,12 +4,14 @@ import TransportMap from './components/Map.jsx'
 import NearbyPanel from './components/NearbyPanel.jsx'
 import YouBikeChart from './components/YouBikeChart.jsx'
 import StatusBar from './components/StatusBar.jsx'
+import StationSearch from './components/StationSearch.jsx'
 
 const API = import.meta.env.VITE_API_URL || ''
 const REFRESH_MS = 60 * 1000
 
 export default function App() {
   const [status, setStatus] = useState(null)
+  const [mrtStations, setMrtStations] = useState([])
   const [selectedMrt, setSelectedMrt] = useState(null)
   const [selectedExit, setSelectedExit] = useState(null)
   const [exits, setExits] = useState([])
@@ -19,7 +21,6 @@ export default function App() {
   const [lastRefresh, setLastRefresh] = useState(new Date())
   const [refreshTick, setRefreshTick] = useState(0)
 
-  // 用 ref 記住目前選的出口，讓 interval 可以存取最新值
   const selectedExitRef = { current: null }
 
   const fetchStatus = useCallback(() => {
@@ -39,6 +40,7 @@ export default function App() {
 
   // 每分鐘自動刷新
   useEffect(() => {
+    axios.get(`${API}/api/mrt/stations`).then(r => setMrtStations(r.data)).catch(() => {})
     fetchStatus()
     const id = setInterval(() => {
       fetchStatus()
@@ -118,12 +120,15 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#0f1117', color: '#e0e0e0', fontFamily: '-apple-system, "Noto Sans TC", sans-serif' }}>
-      <div style={{ padding: '14px 20px 0' }}>
-        <div style={{ fontSize: '22px', fontWeight: 700, color: '#fff' }}>台北市捷運出口即時交通儀表板</div>
-        <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>點選捷運站 → 選擇出口 → 查看 1 公里內 YouBike × 公車即時資訊</div>
+      <div style={{ padding: '14px 20px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+        <div>
+          <div style={{ fontSize: '22px', fontWeight: 700, color: '#fff' }}>台北市捷運出口即時交通儀表板</div>
+          <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>點選捷運站 → 選擇出口 → 查看 1 公里內 YouBike × 公車即時資訊</div>
+        </div>
+        <StationSearch stations={mrtStations} onSelect={handleSelectMrt} />
       </div>
-      <div style={{ padding: '10px 20px 0' }}>
-        <StatusBar status={status} lastRefresh={lastRefresh} onRefresh={handleRefresh} />
+      <div style={{ padding: '8px 20px 0' }}>
+        <StatusBar lastRefresh={lastRefresh} onRefresh={handleRefresh} />
       </div>
       <div style={{ display: 'flex', gap: '14px', padding: '10px 20px', height: 'calc(100vh - 110px)' }}>
         <div style={{ flex: '1 1 0', background: '#1a1d27', borderRadius: '12px', border: '1px solid #2a2d3a', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
