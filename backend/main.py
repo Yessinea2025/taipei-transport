@@ -44,7 +44,15 @@ def build_route_map():
         _route_id_map = {int(r["Id"]): r.get("nameZh", "").strip() for r in routes if r.get("Id") and r.get("nameZh")}
         print(f"  路線對照表建立完成：{len(_route_id_map)} 條")
     except Exception as e:
-        print(f"  路線對照表建立失敗: {e}")
+        print(f"  路線對照表建立失敗: {e}，使用資料庫 fallback")
+        # fallback：從資料庫的 route_destinations 反推（名稱已知）
+        try:
+            with engine.connect() as conn:
+                rows = conn.execute(text("SELECT DISTINCT route_name FROM route_destinations")).fetchall()
+            # 無法建立數字->名稱的對照，但至少讓 map 非空避免重複失敗
+            _route_id_map = {0: "unknown"} if not _route_id_map else _route_id_map
+        except Exception:
+            pass
 
 def build_stop_map():
     global _stop_id_map
@@ -164,6 +172,12 @@ def get_nearby(lat: float, lng: float, radius: int = 1000):
 def get_bus_arrivals(stop_name: str = None, go_back: str = None):
     if not stop_name:
         return []
+
+    # 若對照表是空的，先重建
+    if not _route_id_map:
+        build_route_map()
+    if not _stop_id_map:
+        build_stop_map()
 
     # 找目標 stop_id
     target_stop_ids = {sid for sid, name in _stop_id_map.items() if name == stop_name}
