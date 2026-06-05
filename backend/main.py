@@ -193,8 +193,8 @@ def get_nearby(lat: float, lng: float, radius: int = 1000):
     nearby_bus.sort(key=lambda x: x["distance"])
 
     return {
-        "youbike": nearby_youbike[:20],
-        "bus_stops": nearby_bus[:30],
+        "youbike": nearby_youbike,
+        "bus_stops": nearby_bus,
     }
 
 @app.get("/api/bus/arrivals")
