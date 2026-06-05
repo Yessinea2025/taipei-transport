@@ -118,7 +118,7 @@ export default function NearbyPanel({ nearbyData, selectedMrt, selectedExit, act
                                 cursor: 'pointer', textDecoration: 'underline'
                               }}
                             >
-                              {a.route_id} 路
+                              {a.route_id}{/^\d+$/.test(a.route_id) ? ' 路' : ''}
                             </span>
                             {a.destination && (
                               <div style={{ fontSize: '11px', color: '#555', marginTop: '2px' }}>

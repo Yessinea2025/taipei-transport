@@ -16,7 +16,7 @@ export default function YouBikeChart({ stationId, apiBase }) {
       .then(r => {
         const formatted = r.data.map(d => ({
           ...d,
-          time: new Date(d.time_bucket).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
+          time: new Date(d.time_bucket + 'Z').toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' }),
           avg_bikes: Number(d.avg_bikes),
           avg_spaces: Number(d.avg_spaces),
         }))
