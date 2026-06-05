@@ -466,7 +466,6 @@ def load_bus(arrivals):
 def cleanup_old_data():
     with engine.connect() as conn:
         conn.execute(text("DELETE FROM youbike_snapshots WHERE recorded_at < NOW() - INTERVAL '7 days'"))
-        conn.execute(text("DELETE FROM bus_arrivals WHERE recorded_at < NOW() - INTERVAL '2 days'"))
         conn.commit()
 
 def run_etl():
@@ -490,9 +489,7 @@ def run_etl():
         load_bus_stops(stops)
         load_bus_shapes(route_id_map)
         load_route_destinations(route_destinations)
-        arrivals = transform_bus(estimates, stop_map, route_id_map)
-        load_bus(arrivals)
-        print(f"  公車: {len(arrivals)} 筆到站資料")
+        print(f"  公車靜態資料更新完成")
     except Exception as e:
         print(f"  公車 ETL 失敗: {e}")
     try:
