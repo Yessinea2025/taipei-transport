@@ -97,6 +97,7 @@ export default function App() {
     { color: '#0070bd', label: '板南線' },
     { color: '#f8a217', label: '中和新蘆線' },
     { color: '#a05a2c', label: '文湖線' },
+    { color: '#ffd700', label: '環狀線' },
   ]
 
   return (

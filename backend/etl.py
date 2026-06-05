@@ -2,11 +2,14 @@ import requests
 import gzip
 import json
 import re
+import csv
+import io
 from sqlalchemy import text
 from database import engine
 from datetime import datetime
 
-YOUBIKE_API = "https://tcgbusfs.blob.core.windows.net/dotapp/youbike/v2/youbike_immediate.json"
+YOUBIKE_TP_API = "https://tcgbusfs.blob.core.windows.net/dotapp/youbike/v2/youbike_immediate.json"
+YOUBIKE_NTP_API = "https://data.ntpc.gov.tw/api/datasets/010e5b15-3823-4b20-b401-b1cf000550c5/json"
 BUS_ESTIMATE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetEstimateTime.gz"
 BUS_STOP_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetStop.gz"
 BUS_ROUTE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetRoute.gz"
@@ -27,19 +30,11 @@ TRANSFER_STATIONS = {
     "中山":       ["#e3002c", "#008659"],
     "松江南京":   ["#008659", "#f8a217"],
     "西門":       ["#0070bd", "#008659"],
+    # 環狀線接界站
+    "頭前庄":     ["#ffd700", "#f8a217"],
+    "景安":       ["#ffd700", "#f8a217"],
+    "大坪林":     ["#ffd700", "#008659"],
 }
-
-# 台北車站 M 出口（手動內建）
-TAIPEI_MAIN_EXITS = [
-    {"station_name": "台北車站", "exit_name": "台北車站出口M1", "exit_number": "M1", "lat": 25.04787, "lng": 121.51690},
-    {"station_name": "台北車站", "exit_name": "台北車站出口M2", "exit_number": "M2", "lat": 25.04823, "lng": 121.51745},
-    {"station_name": "台北車站", "exit_name": "台北車站出口M3", "exit_number": "M3", "lat": 25.04855, "lng": 121.51745},
-    {"station_name": "台北車站", "exit_name": "台北車站出口M4", "exit_number": "M4", "lat": 25.04870, "lng": 121.51690},
-    {"station_name": "台北車站", "exit_name": "台北車站出口M5", "exit_number": "M5", "lat": 25.04855, "lng": 121.51635},
-    {"station_name": "台北車站", "exit_name": "台北車站出口M6", "exit_number": "M6", "lat": 25.04823, "lng": 121.51635},
-    {"station_name": "台北車站", "exit_name": "台北車站出口M7", "exit_number": "M7", "lat": 25.04787, "lng": 121.51635},
-    {"station_name": "台北車站", "exit_name": "台北車站出口M8", "exit_number": "M8", "lat": 25.04760, "lng": 121.51690},
-]
 
 MRT_STATIONS = [
     # 淡水信義線 (紅)
@@ -87,14 +82,14 @@ MRT_STATIONS = [
     {"station_name":"七張","station_code":"G13","line":"松山新店線","line_color":"#008659","lat":24.9800,"lng":121.5380},
     {"station_name":"新店區公所","station_code":"G14","line":"松山新店線","line_color":"#008659","lat":24.9726,"lng":121.5380},
     {"station_name":"新店","station_code":"G15","line":"松山新店線","line_color":"#008659","lat":24.9672,"lng":121.5380},
-    {"station_name":"小碧潭","station_code":"G15A","line":"松山新店線","line_color":"#008659","lat":24.9603,"lng":121.5380},
+    {"station_name":"小碧潭","station_code":"G15A","line":"松山新店線","line_color":"#008659","lat":24.9711,"lng":121.5299},
     # 板南線 (藍)
-    {"station_name":"頂埔","station_code":"BL01","line":"板南線","line_color":"#0070bd","lat":24.9771,"lng":121.4312},
+    {"station_name":"頂埔","station_code":"BL01","line":"板南線","line_color":"#0070bd","lat":24.9607,"lng":121.4191},
     {"station_name":"土城","station_code":"BL02","line":"板南線","line_color":"#0070bd","lat":24.9740,"lng":121.4432},
     {"station_name":"永寧","station_code":"BL03","line":"板南線","line_color":"#0070bd","lat":24.9750,"lng":121.4565},
     {"station_name":"海山","station_code":"BL04","line":"板南線","line_color":"#0070bd","lat":24.9796,"lng":121.4664},
     {"station_name":"亞東醫院","station_code":"BL05","line":"板南線","line_color":"#0070bd","lat":24.9859,"lng":121.4735},
-    {"station_name":"板橋","station_code":"BL06","line":"板南線","line_color":"#0070bd","lat":25.0143,"lng":121.4637},
+    {"station_name":"板橋","station_code":"BL06","line":"板南線","line_color":"#0070bd","lat":25.0133,"lng":121.4618},
     {"station_name":"新埔","station_code":"BL07","line":"板南線","line_color":"#0070bd","lat":25.0143,"lng":121.4735},
     {"station_name":"江子翠","station_code":"BL08","line":"板南線","line_color":"#0070bd","lat":25.0143,"lng":121.4835},
     {"station_name":"龍山寺","station_code":"BL09","line":"板南線","line_color":"#0070bd","lat":25.0350,"lng":121.4997},
@@ -130,7 +125,7 @@ MRT_STATIONS = [
     {"station_name":"古亭","station_code":"O16","line":"中和新蘆線","line_color":"#f8a217","lat":25.0243,"lng":121.5289},
     {"station_name":"頂溪","station_code":"O17","line":"中和新蘆線","line_color":"#f8a217","lat":25.0091,"lng":121.5081},
     {"station_name":"永安市場","station_code":"O18","line":"中和新蘆線","line_color":"#f8a217","lat":24.9983,"lng":121.5081},
-    {"station_name":"景安","station_code":"O19","line":"中和新蘆線","line_color":"#f8a217","lat":24.9934,"lng":121.5081},
+    {"station_name":"景安","station_code":"O19","line":"中和新蘆線","line_color":"#f8a217","lat":24.9934,"lng":121.5045},
     {"station_name":"南勢角","station_code":"O20","line":"中和新蘆線","line_color":"#f8a217","lat":24.9873,"lng":121.5081},
     # 文湖線 (深棕)
     {"station_name":"動物園","station_code":"BR01","line":"文湖線","line_color":"#a05a2c","lat":24.9990,"lng":121.5780},
@@ -157,7 +152,30 @@ MRT_STATIONS = [
     {"station_name":"東湖","station_code":"BR22","line":"文湖線","line_color":"#a05a2c","lat":25.0715,"lng":121.6280},
     {"station_name":"南港軟體園區","station_code":"BR23","line":"文湖線","line_color":"#a05a2c","lat":25.0631,"lng":121.6178},
     {"station_name":"南港展覽館","station_code":"BR24","line":"文湖線","line_color":"#a05a2c","lat":25.0553,"lng":121.6178},
+    # 環狀線 (金色)
+    {"station_name":"新北產業園區","station_code":"Y01","line":"環狀線","line_color":"#ffd700","lat":25.0616,"lng":121.4598},
+    {"station_name":"幸福","station_code":"Y02","line":"環狀線","line_color":"#ffd700","lat":25.0501,"lng":121.4601},
+    {"station_name":"頭前庄","station_code":"Y03","line":"環狀線","line_color":"#ffd700","lat":25.0398,"lng":121.4603},
+    {"station_name":"新埔民生","station_code":"Y04","line":"環狀線","line_color":"#ffd700","lat":25.0261,"lng":121.4668},
+    {"station_name":"板新","station_code":"Y05","line":"環狀線","line_color":"#ffd700","lat":25.0145,"lng":121.4722},
+    {"station_name":"中原","station_code":"Y06","line":"環狀線","line_color":"#ffd700","lat":25.0084,"lng":121.4842},
+    {"station_name":"橋和","station_code":"Y07","line":"環狀線","line_color":"#ffd700","lat":25.0048,"lng":121.4903},
+    {"station_name":"中和","station_code":"Y08","line":"環狀線","line_color":"#ffd700","lat":25.0022,"lng":121.4965},
+    {"station_name":"景安","station_code":"Y09","line":"環狀線","line_color":"#ffd700","lat":24.9937,"lng":121.5046},
+    {"station_name":"景平","station_code":"Y10","line":"環狀線","line_color":"#ffd700","lat":24.9919,"lng":121.5163},
+    {"station_name":"秀朗橋","station_code":"Y11","line":"環狀線","line_color":"#ffd700","lat":24.9905,"lng":121.5254},
+    {"station_name":"十四張","station_code":"Y12","line":"環狀線","line_color":"#ffd700","lat":24.9845,"lng":121.5277},
+    {"station_name":"大坪林","station_code":"Y13","line":"環狀線","line_color":"#ffd700","lat":24.9828,"lng":121.5409},
 ]
+
+def parse_station_name(exit_name):
+    if exit_name.startswith('台北車站'):
+        return '台北車站'
+    if '站出口' in exit_name:
+        return exit_name.split('站出口')[0]
+    if exit_name.endswith('站出口'):
+        return exit_name[:-3]
+    return exit_name.split('站')[0] if '站' in exit_name else exit_name
 
 def fetch_gz(url):
     resp = requests.get(url, timeout=30)
@@ -167,8 +185,13 @@ def fetch_gz(url):
         return data["BusInfo"]
     return data
 
-def extract_youbike():
-    resp = requests.get(YOUBIKE_API, timeout=10)
+def extract_youbike_taipei():
+    resp = requests.get(YOUBIKE_TP_API, timeout=10)
+    resp.raise_for_status()
+    return resp.json()
+
+def extract_youbike_ntpc():
+    resp = requests.get(YOUBIKE_NTP_API, timeout=10)
     resp.raise_for_status()
     return resp.json()
 
@@ -202,7 +225,7 @@ def parse_wkt_linestring(wkt):
         pass
     return coords
 
-def transform_youbike(raw):
+def transform_youbike_taipei(raw):
     stations, snapshots = [], []
     for item in raw:
         if item.get("act") != "1":
@@ -220,6 +243,30 @@ def transform_youbike(raw):
             "available_bikes": int(item.get("available_rent_bikes", 0)),
             "available_spaces": int(item.get("available_return_bikes", 0)),
         })
+    return stations, snapshots
+
+def transform_youbike_ntpc(raw):
+    stations, snapshots = [], []
+    for item in raw:
+        try:
+            sid = item.get("sno", "")
+            if not sid:
+                continue
+            stations.append({
+                "station_id": f"NTP_{sid}",
+                "station_name": item.get("sna", ""),
+                "area": item.get("sarea", ""),
+                "lat": float(item.get("latitude", 0)),
+                "lng": float(item.get("longitude", 0)),
+                "total_spaces": int(item.get("tot", 0)),
+            })
+            snapshots.append({
+                "station_id": f"NTP_{sid}",
+                "available_bikes": int(item.get("sbi", 0)),
+                "available_spaces": int(item.get("bemp", 0)),
+            })
+        except Exception:
+            continue
     return stations, snapshots
 
 def transform_bus(estimates, stop_map, route_id_map):
@@ -258,6 +305,7 @@ def load_mrt_stations():
                 ON CONFLICT DO NOTHING
             """), s)
         conn.commit()
+    print(f"  捷運站載入完成：{len(MRT_STATIONS)} 站")
 
 def load_mrt_exits():
     with engine.connect() as conn:
@@ -265,16 +313,6 @@ def load_mrt_exits():
         if existing > 0:
             return
     try:
-        # 先載入台北車站手動出口
-        with engine.connect() as conn:
-            for e in TAIPEI_MAIN_EXITS:
-                conn.execute(text("""
-                    INSERT INTO mrt_exits (station_name, exit_name, exit_number, lat, lng)
-                    VALUES (:station_name, :exit_name, :exit_number, :lat, :lng)
-                """), e)
-            conn.commit()
-
-        # 再從 API 抓其他站出口
         resp = requests.get(MRT_EXIT_API, timeout=15)
         resp.raise_for_status()
         data = resp.json()
@@ -284,7 +322,7 @@ def load_mrt_exits():
                 try:
                     exit_name = r.get("出入口名稱", "")
                     exit_number = r.get("出入口編號", "")
-                    station_name = exit_name.split("站")[0] if "站" in exit_name else ""
+                    station_name = parse_station_name(exit_name)
                     if not station_name:
                         continue
                     conn.execute(text("""
@@ -300,7 +338,7 @@ def load_mrt_exits():
                 except Exception:
                     continue
             conn.commit()
-        print(f"  捷運出口載入完成：{len(results) + len(TAIPEI_MAIN_EXITS)} 筆")
+        print(f"  捷運出口載入完成：{len(results)} 筆")
     except Exception as e:
         print(f"  捷運出口載入失敗: {e}")
 
@@ -418,12 +456,19 @@ def cleanup_old_data():
 def run_etl():
     print(f"[{datetime.utcnow()}] ETL 開始...")
     try:
-        raw_youbike = extract_youbike()
-        stations, snapshots = transform_youbike(raw_youbike)
+        raw_tp = extract_youbike_taipei()
+        stations, snapshots = transform_youbike_taipei(raw_tp)
         load_youbike(stations, snapshots)
-        print(f"  YouBike: {len(snapshots)} 筆快照")
+        print(f"  YouBike 台北: {len(snapshots)} 筆")
     except Exception as e:
-        print(f"  YouBike ETL 失敗: {e}")
+        print(f"  YouBike 台北 ETL 失敗: {e}")
+    try:
+        raw_ntp = extract_youbike_ntpc()
+        stations, snapshots = transform_youbike_ntpc(raw_ntp)
+        load_youbike(stations, snapshots)
+        print(f"  YouBike 新北: {len(snapshots)} 筆")
+    except Exception as e:
+        print(f"  YouBike 新北 ETL 失敗: {e}")
     try:
         estimates, stop_map, route_id_map, stops, route_destinations = extract_bus()
         load_bus_stops(stops)

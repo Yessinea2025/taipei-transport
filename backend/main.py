@@ -58,15 +58,14 @@ def get_mrt_exits(station_name: str):
             SELECT station_name, exit_name, exit_number, lat, lng
             FROM mrt_exits
             WHERE station_name = :name
-            ORDER BY exit_number::integer
+            ORDER BY exit_name
         """), {"name": station_name}).fetchall()
         if not rows:
-            # 模糊搜尋
             rows = conn.execute(text("""
                 SELECT station_name, exit_name, exit_number, lat, lng
                 FROM mrt_exits
                 WHERE station_name LIKE :name
-                ORDER BY exit_number
+                ORDER BY exit_name
             """), {"name": f"%{station_name}%"}).fetchall()
     return [dict(r._mapping) for r in rows]
 
