@@ -104,7 +104,7 @@ export default function StationSearch({ stations, onSelect }) {
   }
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', width: '220px' }}>
+    <div ref={containerRef} style={{ position: 'relative', width: '220px', zIndex: 1000 }}>
       <div style={{
         display: 'flex', alignItems: 'center',
         background: 'var(--color-background-primary)',
@@ -136,11 +136,11 @@ export default function StationSearch({ stations, onSelect }) {
       {showSuggestions && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9999,
-          background: 'var(--color-background-primary)',
-          border: '0.5px solid var(--color-border-secondary)',
-          borderRadius: 'var(--border-radius-md)',
+          background: '#1a1d27',
+          border: '1px solid #2a2d3a',
+          borderRadius: '8px',
           marginTop: '4px', overflow: 'hidden',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
         }}>
           {suggestions.map((s, i) => (
             <div
@@ -148,10 +148,10 @@ export default function StationSearch({ stations, onSelect }) {
               onMouseDown={() => handleSelect(s)}
               style={{
                 padding: '8px 12px', cursor: 'pointer', fontSize: '13px',
-                background: highlighted === i ? 'var(--color-background-secondary)' : 'transparent',
-                color: highlighted === i ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                background: highlighted === i ? '#2a2d3a' : '#1a1d27',
+                color: highlighted === i ? '#fff' : '#ccc',
                 display: 'flex', alignItems: 'center', gap: '8px',
-                borderBottom: i < suggestions.length - 1 ? '0.5px solid var(--color-border-tertiary)' : 'none',
+                borderBottom: i < suggestions.length - 1 ? '1px solid #2a2d3a' : 'none',
               }}
             >
               {renderColorDot(s.station_name, s.line_color)}

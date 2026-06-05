@@ -124,12 +124,12 @@ export default function App() {
         <div style={{ fontSize: '22px', fontWeight: 700, color: '#fff' }}>台北市捷運出口即時交通儀表板</div>
         <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>點選捷運站 → 選擇出口 → 查看 1 公里內 YouBike × 公車即時資訊</div>
       </div>
-      <div style={{ padding: '8px 20px 0' }}>
-        <StatusBar
-          lastRefresh={lastRefresh}
-          onRefresh={handleRefresh}
-          searchSlot={<StationSearch stations={mrtStations} onSelect={handleSelectMrt} />}
-        />
+      <div style={{ padding: '8px 20px 0', display: 'flex', alignItems: 'center', gap: '10px', position: 'relative', zIndex: 1000 }}>
+        <StationSearch stations={mrtStations} onSelect={handleSelectMrt} />
+        <div style={{ flex: 1 }}>
+          <StatusBar lastRefresh={lastRefresh} onRefresh={handleRefresh} />
+        </div>
+      </div>
       </div>
       <div style={{ display: 'flex', gap: '14px', padding: '10px 20px', height: 'calc(100vh - 110px)' }}>
         <div style={{ flex: '1 1 0', background: '#1a1d27', borderRadius: '12px', border: '1px solid #2a2d3a', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
