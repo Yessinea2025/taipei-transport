@@ -232,18 +232,31 @@ def get_bus_arrivals(stop_name: str = None, go_back: str = None):
         if stop_id not in target_stop_ids:
             continue
         item_go_back = str(item.get("GoBack", "0"))
-        if go_back is not None and item_go_back != go_back:
-            continue
 
         route_id_num = int(item.get("RouteID", 0))
         route_name = _route_id_map.get(route_id_num, str(route_id_num))
+
+        # 用 route_stops_map 驗證方向是否正確
+        # 如果 API 說去程，但去程清單沒有這個站，改成返程（反之亦然）
+        corrected_go_back = item_go_back
+        api_stop_name = _stop_id_map.get(stop_id, "")
+        if api_stop_name:
+            in_go0 = any(s["stop_name"] == api_stop_name for s in _route_stops_map.get((route_name, "0"), []))
+            in_go1 = any(s["stop_name"] == api_stop_name for s in _route_stops_map.get((route_name, "1"), []))
+            if item_go_back == "0" and not in_go0 and in_go1:
+                corrected_go_back = "1"
+            elif item_go_back == "1" and not in_go1 and in_go0:
+                corrected_go_back = "0"
+
+        if go_back is not None and corrected_go_back != go_back:
+            continue
 
         try:
             est = int(item.get("EstimateTime", -1))
         except (ValueError, TypeError):
             est = -1
 
-        key = (route_name, item_go_back)
+        key = (route_name, corrected_go_back)
         # 保留最快到站的（est >= 0 優先，相同條件取較小值）
         if key not in best:
             best[key] = est
