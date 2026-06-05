@@ -253,8 +253,8 @@ def transform_youbike_ntpc(raw):
             sid = item.get("sno") or item.get("StationNo", "")
             if not sid:
                 continue
-            lat = float(item.get("latitude") or item.get("Latitude") or 0)
-            lng = float(item.get("longitude") or item.get("Longitude") or 0)
+            lat = float(item.get("lat") or item.get("latitude") or item.get("Latitude") or 0)
+            lng = float(item.get("lng") or item.get("longitude") or item.get("Longitude") or 0)
             if lat == 0 or lng == 0:
                 continue
             stations.append({
