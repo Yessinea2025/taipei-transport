@@ -120,15 +120,16 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#0f1117', color: '#e0e0e0', fontFamily: '-apple-system, "Noto Sans TC", sans-serif' }}>
-      <div style={{ padding: '14px 20px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-        <div>
-          <div style={{ fontSize: '22px', fontWeight: 700, color: '#fff' }}>台北市捷運出口即時交通儀表板</div>
-          <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>點選捷運站 → 選擇出口 → 查看 1 公里內 YouBike × 公車即時資訊</div>
-        </div>
-        <StationSearch stations={mrtStations} onSelect={handleSelectMrt} />
+      <div style={{ padding: '14px 20px 0' }}>
+        <div style={{ fontSize: '22px', fontWeight: 700, color: '#fff' }}>台北市捷運出口即時交通儀表板</div>
+        <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>點選捷運站 → 選擇出口 → 查看 1 公里內 YouBike × 公車即時資訊</div>
       </div>
       <div style={{ padding: '8px 20px 0' }}>
-        <StatusBar lastRefresh={lastRefresh} onRefresh={handleRefresh} />
+        <StatusBar
+          lastRefresh={lastRefresh}
+          onRefresh={handleRefresh}
+          searchSlot={<StationSearch stations={mrtStations} onSelect={handleSelectMrt} />}
+        />
       </div>
       <div style={{ display: 'flex', gap: '14px', padding: '10px 20px', height: 'calc(100vh - 110px)' }}>
         <div style={{ flex: '1 1 0', background: '#1a1d27', borderRadius: '12px', border: '1px solid #2a2d3a', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
