@@ -465,7 +465,7 @@ def load_bus(arrivals):
 
 def cleanup_old_data():
     with engine.connect() as conn:
-        conn.execute(text("DELETE FROM youbike_snapshots WHERE recorded_at < NOW() - INTERVAL '7 days'"))
+        conn.execute(text("DELETE FROM youbike_snapshots WHERE recorded_at < NOW() - INTERVAL '3 days'"))
         conn.commit()
 
 def run_etl():
