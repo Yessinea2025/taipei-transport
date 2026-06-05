@@ -216,7 +216,48 @@ def get_bus_arrivals(stop_name: str = None, go_back: str = None):
     result.sort(key=lambda x: x["route_id"])
     return result
 
-@app.get("/api/bus/shape/{route_name}")
+@app.get("/api/bus/stops/{route_name}")
+def get_bus_route_stops(route_name: str, go_back: str = "0"):
+    """回傳某路線某方向的所有站點座標和名稱"""
+    # 找 route_id
+    route_id_num = None
+    for rid, name in _route_id_map.items():
+        if name == route_name:
+            route_id_num = rid
+            break
+    if route_id_num is None:
+        return []
+
+    try:
+        stops = fetch_gz(BUS_STOP_API, timeout=10)
+    except Exception:
+        return []
+
+    result = []
+    for s in stops:
+        if str(s.get("routeId", "")) != str(route_id_num):
+            continue
+        if str(s.get("goBack", "")) != go_back:
+            continue
+        try:
+            lat = float(s.get("latitude", 0))
+            lng = float(s.get("longitude", 0))
+            if lat == 0 or lng == 0:
+                continue
+            result.append({
+                "stop_id": s.get("Id", ""),
+                "stop_name": s.get("nameZh", ""),
+                "seq": int(s.get("seqNo", 0)),
+                "lat": lat,
+                "lng": lng,
+            })
+        except Exception:
+            continue
+
+    result.sort(key=lambda x: x["seq"])
+    return result
+
+
 def get_bus_shape(route_name: str, go_back: str = "0"):
     with engine.connect() as conn:
         row = conn.execute(text("""

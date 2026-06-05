@@ -34,7 +34,6 @@ function makeSquareIcon(colors, isSelected) {
       className: '',
     })
   }
-  // 交叉站：左右各一半顏色
   const [c1, c2] = colors
   return new L.DivIcon({
     html: `<div style="width:${size}px;height:${size}px;border-radius:2px;transform:rotate(45deg);overflow:hidden;border:${isSelected ? '3px solid #fff' : '2px solid #fff'};display:flex;">
@@ -55,13 +54,10 @@ function makeExitIcon(exitNumber, isSelected) {
   return new L.DivIcon({
     html: `<div style="
       min-width:22px;height:22px;padding:0 4px;
-      background:${bg};
-      border-radius:11px;
-      border:2px solid ${border};
+      background:${bg};border-radius:11px;border:2px solid ${border};
       display:flex;align-items:center;justify-content:center;
       font-size:11px;font-weight:700;color:${color};
-      white-space:nowrap;
-      box-shadow:0 1px 4px rgba(0,0,0,0.5);
+      white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.5);
     ">${label}</div>`,
     iconSize: [22, 22],
     iconAnchor: [11, 11],
@@ -71,10 +67,22 @@ function makeExitIcon(exitNumber, isSelected) {
 
 export default function TransportMap({ apiBase, selectedMrt, selectedExit, exits, onSelectMrt, onSelectExit, nearbyData, activeShape, onSelectYoubike }) {
   const [mrtStations, setMrtStations] = useState([])
+  const [routeStops, setRouteStops] = useState([])
 
   useEffect(() => {
     axios.get(`${apiBase}/api/mrt/stations`).then(r => setMrtStations(r.data)).catch(() => {})
   }, [])
+
+  // 點了路線後抓站點
+  useEffect(() => {
+    if (!activeShape?.routeName) {
+      setRouteStops([])
+      return
+    }
+    axios.get(`${apiBase}/api/bus/stops/${encodeURIComponent(activeShape.routeName)}`, {
+      params: { go_back: activeShape.goBack }
+    }).then(r => setRouteStops(r.data)).catch(() => setRouteStops([]))
+  }, [activeShape?.routeName, activeShape?.goBack])
 
   return (
     <MapContainer center={[25.045, 121.525]} zoom={13} style={{ height: '100%', width: '100%' }}>
@@ -153,6 +161,23 @@ export default function TransportMap({ apiBase, selectedMrt, selectedExit, exits
           pathOptions={{ color: '#facc15', weight: 4, opacity: 0.9 }}
         />
       )}
+
+      {/* 路線站點 */}
+      {routeStops.map((s, i) => (
+        <CircleMarker
+          key={`rs-${i}`}
+          center={[s.lat, s.lng]}
+          radius={5}
+          pathOptions={{ color: '#facc15', fillColor: '#1a1d27', fillOpacity: 1, weight: 2 }}
+        >
+          <Tooltip direction="top" offset={[0, -6]} opacity={0.95} permanent={false}>
+            <div style={{ fontSize: '12px' }}>
+              <strong>{s.stop_name}</strong>
+              <span style={{ color: '#aaa', marginLeft: '6px' }}>第 {s.seq} 站</span>
+            </div>
+          </Tooltip>
+        </CircleMarker>
+      ))}
     </MapContainer>
   )
 }
