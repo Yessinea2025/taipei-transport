@@ -191,9 +191,20 @@ def extract_youbike_taipei():
     return resp.json()
 
 def extract_youbike_ntpc():
-    resp = requests.get(YOUBIKE_NTP_API, timeout=10)
-    resp.raise_for_status()
-    return resp.json()
+    all_data = []
+    page = 0
+    while True:
+        url = f"https://data.ntpc.gov.tw/api/datasets/010e5b15-3823-4b20-b401-b1cf000550c5/json?size=1000&page={page}"
+        resp = requests.get(url, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        if not data:
+            break
+        all_data.extend(data)
+        if len(data) < 1000:
+            break
+        page += 1
+    return all_data
 
 def extract_bus():
     routes = fetch_gz(BUS_ROUTE_API)
