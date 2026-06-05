@@ -24,6 +24,7 @@ scheduler = BackgroundScheduler()
 # 記憶體快取：RouteID(int) -> 路線名稱
 _route_id_map: dict = {}
 _stop_id_map: dict = {}
+_route_stops_map: dict = {}  # (route_name, go_back) -> [{stop_name, lat, lng, seq}]
 
 BUS_ROUTE_API = "https://tcgbusfs.blob.core.windows.net/blobbus/GetRoute.gz"
 BUS_STOP_API  = "https://tcgbusfs.blob.core.windows.net/blobbus/GetStop.gz"
@@ -45,21 +46,49 @@ def build_route_map():
         print(f"  路線對照表建立完成：{len(_route_id_map)} 條")
     except Exception as e:
         print(f"  路線對照表建立失敗: {e}，使用資料庫 fallback")
-        # fallback：從資料庫的 route_destinations 反推（名稱已知）
         try:
             with engine.connect() as conn:
                 rows = conn.execute(text("SELECT DISTINCT route_name FROM route_destinations")).fetchall()
-            # 無法建立數字->名稱的對照，但至少讓 map 非空避免重複失敗
             _route_id_map = {0: "unknown"} if not _route_id_map else _route_id_map
         except Exception:
             pass
 
 def build_stop_map():
-    global _stop_id_map
+    global _stop_id_map, _route_stops_map
     try:
         stops = fetch_gz(BUS_STOP_API)
         _stop_id_map = {int(s["Id"]): s.get("nameZh", "") for s in stops if s.get("Id")}
         print(f"  站牌對照表建立完成：{len(_stop_id_map)} 個")
+
+        # 同時建立路線站點快取
+        route_stops: dict = {}
+        for s in stops:
+            try:
+                route_id = int(s.get("routeId", 0))
+                route_name = _route_id_map.get(route_id)
+                if not route_name:
+                    continue
+                go_back = str(s.get("goBack", "0"))
+                lat = float(s.get("latitude", 0))
+                lng = float(s.get("longitude", 0))
+                if lat == 0 or lng == 0:
+                    continue
+                key = (route_name, go_back)
+                if key not in route_stops:
+                    route_stops[key] = []
+                route_stops[key].append({
+                    "stop_name": s.get("nameZh", ""),
+                    "seq": int(s.get("seqNo", 0)),
+                    "lat": lat,
+                    "lng": lng,
+                })
+            except Exception:
+                continue
+        # 排序
+        for key in route_stops:
+            route_stops[key].sort(key=lambda x: x["seq"])
+        _route_stops_map = route_stops
+        print(f"  路線站點快取建立完成：{len(_route_stops_map)} 條路線方向")
     except Exception as e:
         print(f"  站牌對照表建立失敗: {e}")
 
@@ -232,44 +261,10 @@ def get_bus_arrivals(stop_name: str = None, go_back: str = None):
 
 @app.get("/api/bus/stops/{route_name}")
 def get_bus_route_stops(route_name: str, go_back: str = "0"):
-    """回傳某路線某方向的所有站點座標和名稱"""
-    # 找 route_id
-    route_id_num = None
-    for rid, name in _route_id_map.items():
-        if name == route_name:
-            route_id_num = rid
-            break
-    if route_id_num is None:
-        return []
-
-    try:
-        stops = fetch_gz(BUS_STOP_API, timeout=10)
-    except Exception:
-        return []
-
-    result = []
-    for s in stops:
-        if str(s.get("routeId", "")) != str(route_id_num):
-            continue
-        if str(s.get("goBack", "")) != go_back:
-            continue
-        try:
-            lat = float(s.get("latitude", 0))
-            lng = float(s.get("longitude", 0))
-            if lat == 0 or lng == 0:
-                continue
-            result.append({
-                "stop_id": s.get("Id", ""),
-                "stop_name": s.get("nameZh", ""),
-                "seq": int(s.get("seqNo", 0)),
-                "lat": lat,
-                "lng": lng,
-            })
-        except Exception:
-            continue
-
-    result.sort(key=lambda x: x["seq"])
-    return result
+    """回傳某路線某方向的所有站點座標和名稱（從記憶體快取）"""
+    key = (route_name, go_back)
+    stops = _route_stops_map.get(key, [])
+    return stops
 
 
 @app.get("/api/bus/shape/{route_name}")
