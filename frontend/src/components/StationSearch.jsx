@@ -136,11 +136,11 @@ export default function StationSearch({ stations, onSelect }) {
       {showSuggestions && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 99999,
-          background: '#1a1d27',
-          border: '1px solid #2a2d3a',
+          background: '#ffffff',
+          border: '1px solid #d4c9b0',
           borderRadius: '8px',
           marginTop: '4px', overflow: 'hidden',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.8)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
         }}>
           {suggestions.map((s, i) => (
             <div
@@ -148,15 +148,15 @@ export default function StationSearch({ stations, onSelect }) {
               onMouseDown={() => handleSelect(s)}
               style={{
                 padding: '8px 12px', cursor: 'pointer', fontSize: '13px',
-                background: highlighted === i ? '#2a2d3a' : '#1a1d27',
-                color: highlighted === i ? '#fff' : '#ccc',
+                background: highlighted === i ? '#f0ebe0' : '#ffffff',
+                color: '#222',
                 display: 'flex', alignItems: 'center', gap: '8px',
-                borderBottom: i < suggestions.length - 1 ? '1px solid #2a2d3a' : 'none',
+                borderBottom: i < suggestions.length - 1 ? '1px solid #e8e0d0' : 'none',
               }}
             >
               {renderColorDot(s.station_name, s.line_color)}
               <span>{s.station_name}站</span>
-              <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginLeft: 'auto', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: '11px', color: '#888', marginLeft: 'auto', whiteSpace: 'nowrap' }}>
                 {getLineLabel(s.station_name, s.line)}
               </span>
             </div>
