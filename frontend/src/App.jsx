@@ -6,6 +6,7 @@ import YouBikeChart from './components/YouBikeChart.jsx'
 import StatusBar from './components/StatusBar.jsx'
 
 const API = import.meta.env.VITE_API_URL || ''
+const REFRESH_MS = 60 * 1000
 
 export default function App() {
   const [status, setStatus] = useState(null)
@@ -18,21 +19,43 @@ export default function App() {
   const [lastRefresh, setLastRefresh] = useState(new Date())
   const [refreshTick, setRefreshTick] = useState(0)
 
+  // 用 ref 記住目前選的出口，讓 interval 可以存取最新值
+  const selectedExitRef = { current: null }
+
   const fetchStatus = useCallback(() => {
-    axios.get(`${API}/api/status`).then(r => {
-      setStatus(r.data)
-      setLastRefresh(new Date())
-    }).catch(() => {})
+    axios.get(`${API}/api/status`).then(r => setStatus(r.data)).catch(() => {})
   }, [])
 
+  const fetchNearby = useCallback(async (exit) => {
+    if (!exit) return
+    try {
+      const res = await axios.get(`${API}/api/nearby`, {
+        params: { lat: exit.lat, lng: exit.lng, radius: 1000 }
+      })
+      setNearbyData(res.data)
+      setLastRefresh(new Date())
+    } catch (e) {}
+  }, [])
+
+  // 每分鐘自動刷新
   useEffect(() => {
     fetchStatus()
-    const id = setInterval(fetchStatus, 1 * 60 * 1000)
+    const id = setInterval(() => {
+      fetchStatus()
+      setRefreshTick(t => t + 1)
+    }, REFRESH_MS)
     return () => clearInterval(id)
   }, [])
 
+  // refreshTick 變動時，重新抓 nearby 資料（更新 YouBike）
+  useEffect(() => {
+    if (refreshTick === 0 || !selectedExit) return
+    fetchNearby(selectedExit)
+  }, [refreshTick])
+
   const handleRefresh = () => {
     fetchStatus()
+    if (selectedExit) fetchNearby(selectedExit)
     setRefreshTick(t => t + 1)
   }
 
@@ -71,13 +94,7 @@ export default function App() {
     setNearbyData(null)
     setSelectedYoubike(null)
     setActiveShape(null)
-    try {
-      const res = await axios.get(`${API}/api/nearby`, {
-        params: { lat: exit.lat, lng: exit.lng, radius: 1000 }
-      })
-      setNearbyData(res.data)
-      setLastRefresh(new Date())
-    } catch (e) {}
+    fetchNearby(exit)
   }
 
   const handleSelectShape = async (routeName, goBack) => {

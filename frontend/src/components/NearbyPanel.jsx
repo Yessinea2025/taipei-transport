@@ -36,29 +36,26 @@ export default function NearbyPanel({ nearbyData, selectedMrt, selectedExit, act
     setStopArrivals({})
   }, [selectedExit])
 
-  // 當 refreshTick 變動（手動刷新），重新抓目前開著的站
-  useEffect(() => {
-    if (!activeStop || refreshTick === 0) return
+  // 抓公車到站資料
+  const fetchArrivals = (stopName, direction) => {
     axios.get(`${apiBase}/api/bus/arrivals`, {
-      params: { stop_name: activeStop, go_back: goBack }
+      params: { stop_name: stopName, go_back: direction }
     }).then(r => {
-      setStopArrivals(prev => ({ ...prev, [activeStop]: r.data }))
+      setStopArrivals(prev => ({ ...prev, [stopName]: r.data }))
     }).catch(() => {})
-  }, [refreshTick])
+  }
 
+  // 點了站點時立刻抓
   useEffect(() => {
     if (!activeStop) return
-    const fetch = () => {
-      axios.get(`${apiBase}/api/bus/arrivals`, {
-        params: { stop_name: activeStop, go_back: goBack }
-      }).then(r => {
-        setStopArrivals(prev => ({ ...prev, [activeStop]: r.data }))
-      }).catch(() => {})
-    }
-    fetch()
-    const id = setInterval(fetch, 1 * 60 * 1000)
-    return () => clearInterval(id)
+    fetchArrivals(activeStop, goBack)
   }, [activeStop, goBack])
+
+  // refreshTick 變動時，自動更新目前展開的站點
+  useEffect(() => {
+    if (refreshTick === 0 || !activeStop) return
+    fetchArrivals(activeStop, goBack)
+  }, [refreshTick])
 
   return (
     <div style={{ background: '#1a1d27', borderRadius: '12px', border: '1px solid #2a2d3a', padding: '14px', display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: 'calc(100vh - 200px)' }}>
